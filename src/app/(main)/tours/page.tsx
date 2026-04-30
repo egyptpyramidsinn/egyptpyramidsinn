@@ -2,7 +2,13 @@ import { getTours } from '@/lib/supabase/tours';
 import { ToursPageClient } from './tours-page-client';
 import type { Metadata } from 'next';
 import { getAgencySettings, getPageMetadata } from '@/lib/supabase/agency-content';
-import { getToursAvailableOnDate } from '@/lib/supabase/tour-availability';
+import {
+  getToursAvailableOnDate,
+  getTourDateStatusMap,
+  type TourDateStatus,
+} from '@/lib/supabase/tour-availability';
+import { cookies } from 'next/headers';
+import type { Tour } from '@/types';
 
 export async function generateMetadata({
   searchParams,
@@ -34,16 +40,83 @@ export async function generateMetadata({
       description = `Explore our ${type} tours. Unforgettable experiences await.`;
     }
 
-    return {
-      title,
-      description,
-    };
+    return { title, description };
   }
 
   return getPageMetadata('tours', {
     title: 'Tours',
     description: 'Browse our selection of tours and travel experiences.',
   });
+}
+
+const DEFAULT_PAGE_SIZE = 12;
+const MAX_PAGE_SIZE = 48;
+
+function getMinAdultPrice(tour: Tour): number {
+  const prices: number[] = [];
+  for (const tier of tour.priceTiers ?? []) {
+    if (typeof tier?.pricePerAdult === 'number') prices.push(tier.pricePerAdult);
+  }
+  for (const pkg of tour.packages ?? []) {
+    for (const tier of pkg.priceTiers ?? []) {
+      if (typeof tier?.pricePerAdult === 'number') prices.push(tier.pricePerAdult);
+    }
+  }
+  if (prices.length === 0) return Number.POSITIVE_INFINITY;
+  return Math.min(...prices);
+}
+
+function scoreTours(tours: Tour[], context: { country: string }): Tour[] {
+  const country = context.country.trim().toLowerCase();
+  const scored = tours.map((tour) => {
+    const ratingNormalized = Math.max(0, Math.min(1, (tour.rating ?? 0) / 5));
+    const popularity = 0; // reviewCount unavailable on Tour type
+    const localeAffinity =
+      country &&
+      typeof tour.destination === 'string' &&
+      tour.destination.toLowerCase().includes(country)
+        ? 0.2
+        : 0;
+    const score = ratingNormalized * 0.6 + popularity * 0.3 + localeAffinity * 0.1;
+    return { tour, score };
+  });
+  scored.sort((a, b) => b.score - a.score);
+  return scored.map((s) => s.tour);
+}
+
+function applySort(tours: Tour[], sort: string, country: string): Tour[] {
+  const list = [...tours];
+  switch (sort) {
+    case 'price_asc':
+      list.sort((a, b) => getMinAdultPrice(a) - getMinAdultPrice(b));
+      return list;
+    case 'price_desc':
+      list.sort((a, b) => getMinAdultPrice(b) - getMinAdultPrice(a));
+      return list;
+    case 'duration_asc':
+      list.sort((a, b) => (a.duration ?? 0) - (b.duration ?? 0));
+      return list;
+    case 'duration_desc':
+      list.sort((a, b) => (b.duration ?? 0) - (a.duration ?? 0));
+      return list;
+    case 'rating_desc':
+      list.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
+      return list;
+    case 'name_asc':
+      list.sort((a, b) => a.name.localeCompare(b.name));
+      return list;
+    case 'best_value':
+      list.sort((a, b) => {
+        const ratioA = getMinAdultPrice(a) / Math.max(a.duration ?? 1, 1);
+        const ratioB = getMinAdultPrice(b) / Math.max(b.duration ?? 1, 1);
+        return ratioA - ratioB;
+      });
+      return list;
+    case 'recommended':
+    case '':
+    default:
+      return scoreTours(list, { country });
+  }
 }
 
 export default async function AllToursPage({
@@ -59,84 +132,97 @@ export default async function AllToursPage({
   const sort = typeof resolvedSearchParams?.sort === 'string' ? resolvedSearchParams.sort : '';
   const travelDate =
     typeof resolvedSearchParams?.travelDate === 'string' ? resolvedSearchParams.travelDate : '';
+
+  const rawPage = Number.parseInt(
+    typeof resolvedSearchParams?.page === 'string' ? resolvedSearchParams.page : '1',
+    10
+  );
+  const page = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1;
+  const rawPageSize = Number.parseInt(
+    typeof resolvedSearchParams?.pageSize === 'string' ? resolvedSearchParams.pageSize : '',
+    10
+  );
+  const pageSize =
+    Number.isFinite(rawPageSize) && rawPageSize > 0
+      ? Math.min(rawPageSize, MAX_PAGE_SIZE)
+      : DEFAULT_PAGE_SIZE;
+
   const settings = await getAgencySettings();
   const destinationOptions = settings?.data?.tourDestinations ?? [];
   const typeOptions = settings?.data?.tourCategories ?? [];
 
-  let tours = [] as Awaited<ReturnType<typeof getTours>>;
+  let country = '';
+  try {
+    const cookieStore = await cookies();
+    country = cookieStore.get('NEXT_COUNTRY')?.value ?? '';
+  } catch {
+    country = '';
+  }
+
+  let filteredTours: Tour[] = [];
   let hasLoadError = false;
   try {
-    tours = await getTours({ q, destination, type });
+    filteredTours = await getTours({ q, destination, type });
   } catch {
-    tours = [];
+    filteredTours = [];
     hasLoadError = true;
   }
 
-  // Filter by travel date availability
-  if (travelDate && tours.length > 0) {
+  if (travelDate && filteredTours.length > 0) {
     try {
       const availableTourIds = await getToursAvailableOnDate(
         travelDate,
-        tours.map((t) => t.id)
+        filteredTours.map((t) => t.id)
       );
-      // Keep tours that either have no restriction or are explicitly available
       if (availableTourIds !== null) {
-        tours = tours.filter((t) => availableTourIds.includes(t.id));
+        const allowed = new Set(availableTourIds);
+        filteredTours = filteredTours.filter((t) => allowed.has(t.id));
       }
     } catch {
-      // If availability check fails, show all tours
+      // ignore — show all
     }
   }
 
-  let allTours = tours;
+  let allTours: Tour[] = filteredTours;
+  let suggestionTourNames: string[] = [];
   try {
-    allTours = await getTours();
+    const everyTour = await getTours({ skipTranslation: true });
+    allTours = everyTour;
+    suggestionTourNames = everyTour
+      .map((t) => t.name)
+      .filter((name): name is string => typeof name === 'string' && name.length > 0)
+      .slice(0, 200);
   } catch {
-    allTours = tours;
+    allTours = filteredTours;
+    suggestionTourNames = filteredTours.map((t) => t.name);
   }
 
-  const getMinAdultPrice = (tour: {
-    priceTiers?: Array<{ pricePerAdult: number }>;
-    packages?: Array<{ priceTiers: Array<{ pricePerAdult: number }> }>;
-  }) => {
-    const prices: number[] = [];
-    for (const tier of tour.priceTiers ?? []) {
-      if (typeof tier?.pricePerAdult === 'number') prices.push(tier.pricePerAdult);
-    }
-    for (const pkg of tour.packages ?? []) {
-      for (const tier of pkg.priceTiers ?? []) {
-        if (typeof tier?.pricePerAdult === 'number') prices.push(tier.pricePerAdult);
-      }
-    }
-    if (prices.length === 0) return Number.POSITIVE_INFINITY;
-    return Math.min(...prices);
-  };
+  const sortedTours = applySort(filteredTours, sort, country);
+  const total = sortedTours.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const startIdx = (safePage - 1) * pageSize;
+  const pagedTours = sortedTours.slice(startIdx, startIdx + pageSize);
 
-  const sortedTours = [...tours];
-  switch (sort) {
-    case 'price_asc':
-      sortedTours.sort((a, b) => getMinAdultPrice(a) - getMinAdultPrice(b));
-      break;
-    case 'price_desc':
-      sortedTours.sort((a, b) => getMinAdultPrice(b) - getMinAdultPrice(a));
-      break;
-    case 'duration_asc':
-      sortedTours.sort((a, b) => (a.duration ?? 0) - (b.duration ?? 0));
-      break;
-    case 'duration_desc':
-      sortedTours.sort((a, b) => (b.duration ?? 0) - (a.duration ?? 0));
-      break;
-    case 'rating_desc':
-      sortedTours.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
-      break;
-    case 'name_asc':
-      sortedTours.sort((a, b) => a.name.localeCompare(b.name));
-      break;
+  let availabilityStatusByTourId: Record<string, TourDateStatus> = {};
+  if (travelDate && pagedTours.length > 0) {
+    try {
+      availabilityStatusByTourId = await getTourDateStatusMap(
+        travelDate,
+        pagedTours.map((t) => t.id)
+      );
+    } catch {
+      availabilityStatusByTourId = {};
+    }
   }
 
   return (
     <ToursPageClient
-      sortedTours={sortedTours}
+      sortedTours={pagedTours}
+      total={total}
+      page={safePage}
+      pageSize={pageSize}
+      totalPages={totalPages}
       allTours={allTours}
       q={q}
       destination={destination}
@@ -146,6 +232,8 @@ export default async function AllToursPage({
       destinationOptions={destinationOptions}
       typeOptions={typeOptions}
       hasLoadError={hasLoadError}
+      availabilityStatusByTourId={availabilityStatusByTourId}
+      suggestionTourNames={suggestionTourNames}
     />
   );
 }

@@ -1065,10 +1065,16 @@ export default function SettingsPage() {
     };
 
     try {
-      await updateAgencySettings(nextSettingsData, logoUrl, faviconUrl, {
-        ogImageUrl: ogImageResult.url,
-        twitterImageUrl: twitterImageResult.url,
-      }, kashierSettingsPayload);
+      await updateAgencySettings(
+        nextSettingsData,
+        logoUrl,
+        faviconUrl,
+        {
+          ogImageUrl: ogImageResult.url,
+          twitterImageUrl: twitterImageResult.url,
+        },
+        kashierSettingsPayload
+      );
       // Sync admin language in the client context immediately
       if (values.adminLanguage) setAdminLanguage(values.adminLanguage);
       toast({
@@ -2431,8 +2437,8 @@ export default function SettingsPage() {
               <CardTitle>Kashier Details</CardTitle>
               <CardDescription>
                 Configure the credentials and hosted checkout options for Kashier online payments.
-                The redirect URL is read from server env key KASHIER_MERCHANT_REDIRECT_URL and
-                must be set in your deployment environment.
+                The redirect URL is read from server env key KASHIER_MERCHANT_REDIRECT_URL and must
+                be set in your deployment environment.
               </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-6 md:grid-cols-2">
@@ -2457,7 +2463,12 @@ export default function SettingsPage() {
                   <FormItem>
                     <FormLabel>API Key</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="KASHIER_API_KEY" {...field} value={field.value ?? ''} />
+                      <Input
+                        type="password"
+                        placeholder="KASHIER_API_KEY"
+                        {...field}
+                        value={field.value ?? ''}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

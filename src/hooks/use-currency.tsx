@@ -16,13 +16,58 @@ interface CurrencyContextType {
 
 const CurrencyContext = createContext<CurrencyContextType | undefined>(undefined);
 
+const COUNTRY_COOKIE = 'NEXT_COUNTRY';
+const IP_GEO_ENDPOINT = 'https://ipapi.co/json/';
+const IP_GEO_TIMEOUT_MS = 3500;
+
 const languageLocales: Record<string, string> = {
   en: 'en-US',
   fr: 'fr-FR',
   de: 'de-DE',
   es: 'es-ES',
   ar: 'ar-EG',
+  zh: 'zh-CN',
+  ru: 'ru-RU',
 };
+
+function isSupportedCurrency(value: string | null | undefined): value is Currency {
+  return !!value && currencies.some((c) => c.code === value);
+}
+
+function readCookie(name: string): string | null {
+  if (typeof document === 'undefined') return null;
+  const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = document.cookie.match(new RegExp(`(?:^|; )${escapedName}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function normalizeCountryCode(country: string | null | undefined): string | null {
+  if (!country) return null;
+  const normalized = country.trim().toUpperCase();
+  return normalized.length === 2 ? normalized : null;
+}
+
+async function fetchCountryFromIp(): Promise<string | null> {
+  if (typeof window === 'undefined') return null;
+
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), IP_GEO_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(IP_GEO_ENDPOINT, {
+      signal: controller.signal,
+      cache: 'no-store',
+    });
+    if (!response.ok) return null;
+
+    const data = (await response.json()) as { country_code?: string; country?: string };
+    return normalizeCountryCode(data.country_code ?? data.country);
+  } catch {
+    return null;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
 
 export function CurrencyProvider({
   children,
@@ -48,14 +93,29 @@ export function CurrencyProvider({
   });
   const [isLoading, setIsLoading] = useState(false);
 
-  // Load currency from local storage on mount; fall back to agency default if nothing saved
+  // Load currency on mount while enforcing EGP for Egypt-based users.
   useEffect(() => {
-    const savedCurrency = localStorage.getItem('currency') as Currency;
-    if (savedCurrency && currencies.some((c) => c.code === savedCurrency)) {
-      setCurrency(savedCurrency);
-    } else if (resolvedDefault !== 'USD') {
-      setCurrency(resolvedDefault);
-    }
+    let isActive = true;
+
+    const initializeCurrency = async () => {
+      const savedCurrency = localStorage.getItem('currency');
+      const preferredCurrency: Currency = isSupportedCurrency(savedCurrency)
+        ? savedCurrency
+        : resolvedDefault;
+
+      const cookieCountry = normalizeCountryCode(readCookie(COUNTRY_COOKIE));
+      const detectedCountry = cookieCountry ?? (await fetchCountryFromIp());
+      const nextCurrency: Currency = detectedCountry === 'EG' ? 'EGP' : preferredCurrency;
+
+      if (!isActive) return;
+      setCurrency((current) => (current === nextCurrency ? current : nextCurrency));
+    };
+
+    initializeCurrency();
+
+    return () => {
+      isActive = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

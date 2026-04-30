@@ -28,6 +28,31 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 // Cache of already-loaded translation maps (avoids re-fetching)
 const loadedLocales: Record<string, Partial<TranslationMap>> = {};
 
+function toSupportedLocale(candidate: string | null | undefined): Language | null {
+  if (!candidate) return null;
+  const normalized = candidate.trim().toLowerCase();
+  if (!normalized) return null;
+  if (localeLoaders[normalized]) return normalized;
+
+  const baseLocale = normalized.split('-')[0];
+  return localeLoaders[baseLocale] ? baseLocale : null;
+}
+
+function detectBrowserLocale(): Language | null {
+  if (typeof navigator === 'undefined') return null;
+  const browserLocales = [
+    ...(Array.isArray(navigator.languages) ? navigator.languages : []),
+    navigator.language,
+  ];
+
+  for (const locale of browserLocales) {
+    const supportedLocale = toSupportedLocale(locale);
+    if (supportedLocale) return supportedLocale;
+  }
+
+  return null;
+}
+
 async function loadLocale(lang: Language): Promise<Partial<TranslationMap>> {
   if (loadedLocales[lang]) return loadedLocales[lang];
   const loader = localeLoaders[lang];
@@ -45,6 +70,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const [fallback, setFallback] = useState<Partial<TranslationMap>>({});
   const router = useRouter();
   const prevLanguageRef = useRef<Language | null>(null);
+  const userTriggeredLanguageChangeRef = useRef(false);
 
   // Load English first so t() never returns bare keys
   useEffect(() => {
@@ -55,15 +81,17 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  // Restore language preference from localStorage, and ensure NEXT_LOCALE cookie
-  // is populated on first mount so server components get the right locale even
-  // for returning users who had a saved preference before this change landed.
+  // Resolve startup language with this priority:
+  // localStorage (supported only) -> browser language -> English fallback.
   useEffect(() => {
-    const saved = localStorage.getItem('language');
-    const initial = saved && localeLoaders[saved] ? saved : 'en';
+    const saved = toSupportedLocale(localStorage.getItem('language'));
+    const detected = detectBrowserLocale();
+    const initial = saved ?? detected ?? 'en';
+
     if (initial !== 'en') {
       setLanguageState(initial);
     }
+
     writeLocaleCookie(initial);
     prevLanguageRef.current = initial;
   }, []);
@@ -77,18 +105,24 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     document.documentElement.lang = language;
     writeLocaleCookie(language);
 
-    // Only refresh server components when the user actively switches locales
-    // (not on initial mount, where prevLanguageRef matches `language`).
+    // Only refresh server components for explicit user locale switches.
     const prev = prevLanguageRef.current;
-    if (prev !== null && prev !== language) {
+    if (prev !== null && prev !== language && userTriggeredLanguageChangeRef.current) {
       router.refresh();
     }
+
+    userTriggeredLanguageChangeRef.current = false;
     prevLanguageRef.current = language;
   }, [language, router]);
 
   const setLanguage = useCallback((lang: Language) => {
-    if (localeLoaders[lang]) {
-      setLanguageState(lang);
+    const supportedLanguage = toSupportedLocale(lang);
+    if (supportedLanguage) {
+      setLanguageState((prev) => {
+        if (prev === supportedLanguage) return prev;
+        userTriggeredLanguageChangeRef.current = true;
+        return supportedLanguage;
+      });
     } else {
       console.warn(`[i18n] Unknown locale "${lang}". Add it to src/locales/index.ts.`);
     }
@@ -129,4 +163,6 @@ export const languages = [
   { code: 'de', name: 'Deutsch', flag: '🇩🇪' },
   { code: 'es', name: 'Español', flag: '🇪🇸' },
   { code: 'ar', name: 'العربية', flag: '🇪🇬' },
+  { code: 'zh', name: '中文', flag: '🇨🇳' },
+  { code: 'ru', name: 'Русский', flag: '🇷🇺' },
 ];

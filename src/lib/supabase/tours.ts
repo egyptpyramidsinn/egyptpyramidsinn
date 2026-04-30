@@ -99,6 +99,54 @@ export async function getTours(options: GetToursOptions = {}): Promise<Tour[]> {
   return translateObjects(tours, TOUR_TRANSLATABLE_FIELDS, target);
 }
 
+type GetToursPagedOptions = GetToursOptions & {
+  offset?: number;
+};
+
+export async function getToursPaged(
+  options: GetToursPagedOptions = {}
+): Promise<{ tours: Tour[]; total: number }> {
+  const { q, destination, type, limit, offset = 0, skipTranslation } = options;
+  const supabase = await createClient();
+  const agencyId = await getCurrentAgencyId();
+
+  let query = supabase.from('tours').select('*', { count: 'exact' }).eq('agency_id', agencyId);
+
+  if (q && q.trim()) {
+    query = query.ilike('name', `%${q.trim()}%`);
+  }
+  if (destination && destination.trim()) {
+    query = query.ilike('destination', destination.trim());
+  }
+  if (type && type.trim()) {
+    query = query.contains('type', [type.trim()]);
+  }
+
+  const safeLimit = typeof limit === 'number' && limit > 0 ? limit : 12;
+  const safeOffset = Math.max(0, offset);
+  query = query.range(safeOffset, safeOffset + safeLimit - 1);
+
+  const { data, error, count } = await query;
+
+  if (error) {
+    console.error('Supabase error fetching paged tours:', error);
+    throw error;
+  }
+
+  if (!data || data.length === 0) {
+    return { tours: [], total: count ?? 0 };
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const tours = (data as any[]).map((item) => ensureTourDefaults(toCamelCase(item) as Tour));
+
+  if (skipTranslation) return { tours, total: count ?? tours.length };
+  const target = await getPublicTargetLocale();
+  if (target === 'en') return { tours, total: count ?? tours.length };
+  const translated = await translateObjects(tours, TOUR_TRANSLATABLE_FIELDS, target);
+  return { tours: translated, total: count ?? translated.length };
+}
+
 export async function getTourBySlug(
   slug: string,
   options: { skipTranslation?: boolean } = {}

@@ -39,12 +39,7 @@ import {
 import Link from 'next/link';
 import { format, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
 import { cn } from '@/lib/utils';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { resendBookingConfirmationEmail } from '@/lib/supabase/bookings';
 import { useToast } from '@/hooks/use-toast';
 
@@ -85,11 +80,7 @@ function BookingIdCopy({ bookingId }: { bookingId: string }) {
             className="mt-0.5 inline-flex w-fit items-center gap-1 rounded font-mono text-[11px] text-muted-foreground transition-colors hover:text-foreground"
           >
             <span>{short}</span>
-            {copied ? (
-              <Check className="h-3 w-3 text-emerald-600" />
-            ) : (
-              <Copy className="h-3 w-3" />
-            )}
+            {copied ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
           </button>
         </TooltipTrigger>
         <TooltipContent>Copy booking ID</TooltipContent>
@@ -231,8 +222,7 @@ export const columns = ({ onUpdateStatus, onDelete }: ColumnsProps): ColumnDef<B
       );
     },
     cell: ({ row }) => {
-      const duplicateGroupId = (row.original as { _duplicateGroupId?: string })
-        ._duplicateGroupId;
+      const duplicateGroupId = (row.original as { _duplicateGroupId?: string })._duplicateGroupId;
       return (
         <div className="flex flex-col gap-1">
           <span className="font-medium">{row.original.customerName}</span>

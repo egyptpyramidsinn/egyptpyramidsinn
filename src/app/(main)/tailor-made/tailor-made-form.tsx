@@ -434,8 +434,11 @@ export function TailorMadeForm() {
                     className={cn(
                       'rounded-lg border p-3 text-left transition-colors',
                       isActive && 'border-primary bg-primary/10 shadow-sm',
-                      isCompleted && 'cursor-pointer border-primary/40 bg-primary/5 hover:bg-primary/10',
-                      !isActive && !isCompleted && 'border-border/70 bg-background text-muted-foreground'
+                      isCompleted &&
+                        'cursor-pointer border-primary/40 bg-primary/5 hover:bg-primary/10',
+                      !isActive &&
+                        !isCompleted &&
+                        'border-border/70 bg-background text-muted-foreground'
                     )}
                   >
                     <p className="text-xs uppercase tracking-wide">Step {step.id}</p>
@@ -482,7 +485,11 @@ export function TailorMadeForm() {
                                   !field.value && 'text-muted-foreground'
                                 )}
                               >
-                                {field.value ? format(field.value, 'PPP') : <span>Pick a date</span>}
+                                {field.value ? (
+                                  format(field.value, 'PPP')
+                                ) : (
+                                  <span>Pick a date</span>
+                                )}
                                 <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                               </Button>
                             </FormControl>
@@ -492,7 +499,9 @@ export function TailorMadeForm() {
                               mode="single"
                               selected={field.value}
                               onSelect={field.onChange}
-                              disabled={(date) => date < new Date() || date < new Date('1900-01-01')}
+                              disabled={(date) =>
+                                date < new Date() || date < new Date('1900-01-01')
+                              }
                               initialFocus
                             />
                           </PopoverContent>
@@ -530,7 +539,9 @@ export function TailorMadeForm() {
                               max={20}
                               {...field}
                               value={field.value || ''}
-                              onChange={(e) => field.onChange(e.target.valueAsNumber || e.target.value)}
+                              onChange={(e) =>
+                                field.onChange(e.target.valueAsNumber || e.target.value)
+                              }
                             />
                           </FormControl>
                           <FormMessage />
@@ -576,7 +587,9 @@ export function TailorMadeForm() {
                                   <FormItem
                                     className={cn(
                                       'rounded-lg border p-4 transition-colors focus-within:ring-2 focus-within:ring-ring',
-                                      checked ? 'border-primary bg-primary/5' : 'hover:border-primary/40'
+                                      checked
+                                        ? 'border-primary bg-primary/5'
+                                        : 'hover:border-primary/40'
                                     )}
                                   >
                                     <div className="flex items-start gap-3">
@@ -636,7 +649,9 @@ export function TailorMadeForm() {
                                   <FormItem
                                     className={cn(
                                       'rounded-lg border p-4 transition-colors focus-within:ring-2 focus-within:ring-ring',
-                                      checked ? 'border-primary bg-primary/5' : 'hover:border-primary/40'
+                                      checked
+                                        ? 'border-primary bg-primary/5'
+                                        : 'hover:border-primary/40'
                                     )}
                                   >
                                     <div className="flex items-start gap-3">
@@ -646,7 +661,11 @@ export function TailorMadeForm() {
                                           checked={checked}
                                           onCheckedChange={(value) =>
                                             field.onChange(
-                                              updateSelection(field.value, item.label, value === true)
+                                              updateSelection(
+                                                field.value,
+                                                item.label,
+                                                value === true
+                                              )
                                             )
                                           }
                                           className="mt-0.5"
@@ -792,7 +811,9 @@ export function TailorMadeForm() {
                                   <FormItem
                                     className={cn(
                                       'rounded-lg border p-4 transition-colors focus-within:ring-2 focus-within:ring-ring',
-                                      checked ? 'border-primary bg-primary/5' : 'hover:border-primary/40'
+                                      checked
+                                        ? 'border-primary bg-primary/5'
+                                        : 'hover:border-primary/40'
                                     )}
                                   >
                                     <div className="flex items-start gap-3">
@@ -802,7 +823,11 @@ export function TailorMadeForm() {
                                           checked={checked}
                                           onCheckedChange={(value) =>
                                             field.onChange(
-                                              updateSelection(field.value, item.label, value === true)
+                                              updateSelection(
+                                                field.value,
+                                                item.label,
+                                                value === true
+                                              )
                                             )
                                           }
                                           className="mt-0.5"
@@ -935,7 +960,9 @@ export function TailorMadeForm() {
                     <p className="text-[11px] text-muted-foreground">Interests</p>
                   </div>
                   <div className="rounded-md bg-muted/40 p-2">
-                    <p className="text-lg font-semibold text-primary">{selectedInclusions.length}</p>
+                    <p className="text-lg font-semibold text-primary">
+                      {selectedInclusions.length}
+                    </p>
                     <p className="text-[11px] text-muted-foreground">Inclusions</p>
                   </div>
                 </div>

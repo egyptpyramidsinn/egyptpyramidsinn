@@ -421,7 +421,9 @@ export default function HomePageClient({
               variants={fadeInUp}
               className={cn(
                 'text-4xl sm:text-5xl md:text-7xl lg:text-8xl font-extrabold mb-5 drop-shadow-2xl max-w-5xl',
-                isRtl ? 'font-sans leading-[1.22] tracking-normal' : 'font-headline leading-[1.08] tracking-tight'
+                isRtl
+                  ? 'font-sans leading-[1.22] tracking-normal'
+                  : 'font-headline leading-[1.08] tracking-tight'
               )}
               dangerouslySetInnerHTML={{ __html: homeContent.hero?.title ?? '' }}
             />
@@ -1481,10 +1483,7 @@ export default function HomePageClient({
               </div>
             </motion.div>
 
-            <motion.div
-              variants={fadeInUp}
-              className="relative order-1 md:order-2"
-            >
+            <motion.div variants={fadeInUp} className="relative order-1 md:order-2">
               <div className="group relative isolate overflow-hidden rounded-2xl border border-border/50 bg-muted/10 shadow-2xl md:rounded-3xl">
                 <div className="relative min-h-[320px] md:min-h-[520px]">
                   {homeContent.whyChooseUs.imageUrl ? (
@@ -1532,7 +1531,10 @@ export default function HomePageClient({
 
       {/* Popular Destinations Section - Only show if Tours are enabled */}
       {homeContent.visibility?.popularDestinations !== false && !isHotelOnly && (
-        <section className="container relative mx-auto overflow-hidden px-4 py-12 md:py-20" id="tours">
+        <section
+          className="container relative mx-auto overflow-hidden px-4 py-12 md:py-20"
+          id="tours"
+        >
           <div className="pointer-events-none absolute inset-x-0 top-16 h-48 rounded-[2rem] bg-gradient-to-r from-primary/10 via-primary/[0.07] to-transparent blur-3xl" />
           <motion.div
             initial="hidden"
@@ -1567,7 +1569,9 @@ export default function HomePageClient({
                     <ArrowRight
                       className={cn(
                         'h-4 w-4 transition-transform duration-300',
-                        isRtl ? 'mr-2 group-hover:-translate-x-0.5' : 'ml-2 group-hover:translate-x-0.5'
+                        isRtl
+                          ? 'mr-2 group-hover:-translate-x-0.5'
+                          : 'ml-2 group-hover:translate-x-0.5'
                       )}
                     />
                   </Link>

@@ -1,6 +1,6 @@
 'use server';
 
-import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
+import { createClient, createPublicClient, createServiceRoleClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/agency-users';
 import { getCurrentAgencyId } from '@/lib/supabase/agencies';
 import { HomeContent } from '@/types';
@@ -91,10 +91,7 @@ function normalizeHomeWhyChooseUsTitleForTranslation(title: string): string {
     .replace(/<\s*br\s*\/?\s*>/gi, '\n')
     .replace(/\r\n?/g, '\n');
 
-  const withoutHtmlTags = withNormalizedLineBreaks.replace(
-    /<\/?[a-z][\w:-]*(?:\s[^>]*)?>/gi,
-    ' '
-  );
+  const withoutHtmlTags = withNormalizedLineBreaks.replace(/<\/?[a-z][\w:-]*(?:\s[^>]*)?>/gi, ' ');
 
   const collapsedWhitespacePerLine = withoutHtmlTags
     .split('\n')
@@ -403,7 +400,7 @@ function isKashierConfiguredForOnlinePayments(
 }
 
 async function getAgencySettingsRow(): Promise<AgencySettingsRow | null> {
-  const supabase = await createClient();
+  const supabase = createPublicClient();
   const agencyId = await getCurrentAgencyId();
 
   const { data, error } = await supabase
@@ -423,7 +420,7 @@ async function getAgencySettingsRow(): Promise<AgencySettingsRow | null> {
 }
 
 export async function getTourTaxonomy(type: TourTaxonomyType): Promise<string[]> {
-  const supabase = await createClient();
+  const supabase = createPublicClient();
   const agencyId = await getCurrentAgencyId();
 
   const { data, error } = await supabase
@@ -458,9 +455,7 @@ export async function getAgencySettings(options: { skipTranslation?: boolean } =
   const rowFaviconUrl = normalizeOptionalUrl(row?.favicon_url);
   const rowOgImageUrl = normalizeOptionalUrl(row?.og_image_url);
   const rowTwitterImageUrl = normalizeOptionalUrl(row?.twitter_image_url);
-  const rowTermsAndConditionMarkdown = normalizeOptionalMarkdown(
-    row?.terms_and_condition_markdown
-  );
+  const rowTermsAndConditionMarkdown = normalizeOptionalMarkdown(row?.terms_and_condition_markdown);
   const rowPolicySecurityMarkdown = normalizeOptionalMarkdown(row?.policy_security_markdown);
   const dataTermsAndConditionMarkdown = normalizeOptionalMarkdown(
     baseData.legalPages?.termsAndConditionMarkdown
@@ -582,7 +577,7 @@ export async function getCheckoutPaymentMethodAvailability(): Promise<CheckoutPa
   );
 
   let cash = paymentMethods?.cash ?? true;
-  let online = (paymentMethods?.online ?? true) && onlineConfigured;
+  const online = (paymentMethods?.online ?? true) && onlineConfigured;
 
   if (!cash && !online) {
     cash = true;
@@ -622,13 +617,16 @@ export async function updateAgencySettings(
   const resolvedLogoUrl = logoUrl === undefined ? (existing?.logo_url ?? null) : logoUrl;
   const existingFaviconUrlFromData =
     normalizeOptionalUrl(existing?.data?.seo?.site?.faviconUrl) ?? null;
-  const settingsOgImageUrl = normalizeOptionalUrl(settingsDataWithoutTaxonomy.seo?.site?.ogImageUrl);
+  const settingsOgImageUrl = normalizeOptionalUrl(
+    settingsDataWithoutTaxonomy.seo?.site?.ogImageUrl
+  );
   const settingsTwitterImageUrl = normalizeOptionalUrl(
     settingsDataWithoutTaxonomy.seo?.site?.twitterImageUrl
   );
   const incomingTermsAndConditionMarkdown =
     settingsDataWithoutTaxonomy.legalPages?.termsAndConditionMarkdown;
-  const incomingPolicySecurityMarkdown = settingsDataWithoutTaxonomy.legalPages?.policySecurityMarkdown;
+  const incomingPolicySecurityMarkdown =
+    settingsDataWithoutTaxonomy.legalPages?.policySecurityMarkdown;
   const existingOgImageUrlFromData = normalizeOptionalUrl(existing?.data?.seo?.site?.ogImageUrl);
   const existingTwitterImageUrlFromData = normalizeOptionalUrl(
     existing?.data?.seo?.site?.twitterImageUrl
@@ -688,7 +686,9 @@ export async function updateAgencySettings(
       ? (existingKashierSettings.display ?? null)
       : normalizeKashierDisplay(kashierSettings.display);
 
-  const currentData = stripKashierKeysFromSettingsData((existing?.data ?? {}) as AgencySettingsData);
+  const currentData = stripKashierKeysFromSettingsData(
+    (existing?.data ?? {}) as AgencySettingsData
+  );
 
   const mergedSettingsData: AgencySettingsData = {
     ...currentData,
@@ -988,7 +988,7 @@ export async function updateTourTaxonomy(input: { categories: string[]; destinat
 }
 
 export async function getHomePageContent(options: { skipTranslation?: boolean } = {}) {
-  const supabase = await createClient();
+  const supabase = createPublicClient();
   const agencyId = await getCurrentAgencyId();
 
   const { data, error } = await supabase

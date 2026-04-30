@@ -21,4 +21,6 @@ export const localeLoaders: Record<string, () => Promise<{ default: Partial<Tran
   ar: () => import('./ar.json'),
   de: () => import('./de.json'),
   es: () => import('./es.json'),
+  zh: () => import('./zh.json'),
+  ru: () => import('./ru.json'),
 };

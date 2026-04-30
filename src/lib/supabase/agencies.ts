@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server';
+import { createPublicClient } from '@/lib/supabase/server';
 import { Agency } from '@/types';
 import { cache } from 'react';
 import { cookies, headers } from 'next/headers';
@@ -26,7 +26,7 @@ const getRequestHost = async (): Promise<string | null> => {
 };
 
 export const getCurrentAgency = cache(async (): Promise<Agency | null> => {
-  const supabase = await createClient();
+  const supabase = createPublicClient();
   const cookieStore = await cookies();
   const overrideSlug = cookieStore.get('admin_agency_override')?.value?.trim();
   const envSlug = process.env.NEXT_PUBLIC_AGENCY_SLUG?.trim();

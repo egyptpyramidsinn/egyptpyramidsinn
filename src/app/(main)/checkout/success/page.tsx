@@ -72,11 +72,7 @@ function BookingIdCopyButton({ bookingId }: { bookingId: string }) {
       aria-label="Copy booking ID"
     >
       <span>Booking ID: {bookingId}</span>
-      {copied ? (
-        <Check className="h-3 w-3 text-emerald-600" />
-      ) : (
-        <Copy className="h-3 w-3" />
-      )}
+      {copied ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
     </button>
   );
 }

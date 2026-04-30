@@ -105,13 +105,10 @@ export function DataTable<TData, TValue>({
     setActiveDatePreset(null);
   };
 
-  const handleDateRangeChange = React.useCallback(
-    (next: DateRange | undefined) => {
-      setDateRange(next);
-      setActiveDatePreset(null);
-    },
-    []
-  );
+  const handleDateRangeChange = React.useCallback((next: DateRange | undefined) => {
+    setDateRange(next);
+    setActiveDatePreset(null);
+  }, []);
 
   const applyDatePreset = (preset: DatePresetKey | null) => {
     if (preset === null) {
@@ -121,7 +118,7 @@ export function DataTable<TData, TValue>({
     }
     const now = new Date();
     let from: Date;
-    let to: Date = endOfDay(now);
+    const to: Date = endOfDay(now);
     switch (preset) {
       case 'today':
         from = startOfDay(now);
@@ -191,9 +188,7 @@ export function DataTable<TData, TValue>({
   }, [data]);
 
   const setPayment = (value: PaymentFilter) => {
-    table
-      .getColumn('paymentMethod')
-      ?.setFilterValue(value === 'all' ? undefined : value);
+    table.getColumn('paymentMethod')?.setFilterValue(value === 'all' ? undefined : value);
   };
 
   const paymentChips: { label: string; value: PaymentFilter }[] = [
@@ -346,9 +341,7 @@ export function DataTable<TData, TValue>({
 
       {selectedCount > 0 && (
         <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-y bg-muted/70 px-4 py-2 backdrop-blur supports-[backdrop-filter]:bg-muted/50">
-          <span className="text-sm font-medium">
-            {selectedCount} selected
-          </span>
+          <span className="text-sm font-medium">{selectedCount} selected</span>
           <div className="ml-auto flex items-center gap-2">
             <AlertDialog open={bulkCancelOpen} onOpenChange={setBulkCancelOpen}>
               <AlertDialogTrigger asChild>
@@ -404,10 +397,7 @@ export function DataTable<TData, TValue>({
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => {
                   return (
-                    <TableHead
-                      key={header.id}
-                      className="sticky top-0 z-10 bg-card"
-                    >
+                    <TableHead key={header.id} className="sticky top-0 z-10 bg-card">
                       {header.isPlaceholder
                         ? null
                         : flexRender(header.column.columnDef.header, header.getContext())}
@@ -453,12 +443,7 @@ export function DataTable<TData, TValue>({
                       </p>
                     </div>
                     {isFiltered && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={resetFilters}
-                        className="mt-1"
-                      >
+                      <Button variant="outline" size="sm" onClick={resetFilters} className="mt-1">
                         Reset filters
                       </Button>
                     )}

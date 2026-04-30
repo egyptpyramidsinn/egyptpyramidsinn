@@ -1,6 +1,6 @@
 'use server';
 
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createPublicClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/agency-users';
 import { getCurrentAgencyId } from '@/lib/supabase/agencies';
 import { toCamelCase } from '@/lib/utils';
@@ -199,35 +199,88 @@ export async function getToursAvailableOnDate(
 ): Promise<string[] | null> {
   if (tourIds.length === 0) return [];
 
-  const supabase = await createClient();
+  const supabase = createPublicClient();
 
-  // Get all blocked tour IDs for this date
-  const { data: blocked, error } = await supabase
-    .from('tour_availability')
-    .select('tour_id')
-    .in('tour_id', tourIds)
-    .eq('date', date)
-    .eq('is_blocked', true);
+  // Avoid oversized `.in()` URLs on large result sets by querying in chunks.
+  const CHUNK_SIZE = 100;
+  const blockedIds = new Set<string>();
 
-  if (error) {
-    console.error('Error checking tour date availability:', error);
-    return null; // null = skip filtering
-  }
+  for (let i = 0; i < tourIds.length; i += CHUNK_SIZE) {
+    const chunk = tourIds.slice(i, i + CHUNK_SIZE);
 
-  const blockedIds = new Set((blocked || []).map((b: { tour_id: string }) => b.tour_id));
+    const { data, error } = await supabase
+      .from('tour_availability')
+      .select('tour_id, available_spots, is_blocked')
+      .in('tour_id', chunk)
+      .eq('date', date);
 
-  // Also check for sold-out dates (available_spots = 0)
-  const { data: soldOut } = await supabase
-    .from('tour_availability')
-    .select('tour_id')
-    .in('tour_id', tourIds)
-    .eq('date', date)
-    .eq('is_blocked', false)
-    .eq('available_spots', 0);
+    if (error) {
+      console.warn('Skipping tour date availability filter:', error.message);
+      return null; // null = skip filtering
+    }
 
-  for (const s of soldOut || []) {
-    blockedIds.add((s as { tour_id: string }).tour_id);
+    for (const row of (data ?? []) as Array<{
+      tour_id: string;
+      available_spots: number | null;
+      is_blocked: boolean;
+    }>) {
+      if (row.is_blocked || row.available_spots === 0) {
+        blockedIds.add(row.tour_id);
+      }
+    }
   }
 
   return tourIds.filter((id) => !blockedIds.has(id));
+}
+
+// ─── Search: Get availability status for tours on a specific date ───────────
+export type TourDateStatus =
+  | { status: 'available' }
+  | { status: 'limited'; spots: number }
+  | { status: 'soldout' }
+  | { status: 'unrestricted' };
+
+export async function getTourDateStatusMap(
+  date: string,
+  tourIds: string[]
+): Promise<Record<string, TourDateStatus>> {
+  const result: Record<string, TourDateStatus> = {};
+  if (tourIds.length === 0) return result;
+
+  const supabase = createPublicClient();
+
+  const { data, error } = await supabase
+    .from('tour_availability')
+    .select('tour_id, available_spots, is_blocked')
+    .in('tour_id', tourIds)
+    .eq('date', date);
+
+  if (error) {
+    console.warn('Skipping tour date status map:', error.message);
+    return result;
+  }
+
+  const seen = new Set<string>();
+  for (const row of (data ?? []) as Array<{
+    tour_id: string;
+    available_spots: number | null;
+    is_blocked: boolean;
+  }>) {
+    seen.add(row.tour_id);
+    if (row.is_blocked) {
+      result[row.tour_id] = { status: 'soldout' };
+    } else if (row.available_spots === null) {
+      result[row.tour_id] = { status: 'unrestricted' };
+    } else if (row.available_spots <= 0) {
+      result[row.tour_id] = { status: 'soldout' };
+    } else if (row.available_spots <= 5) {
+      result[row.tour_id] = { status: 'limited', spots: row.available_spots };
+    } else {
+      result[row.tour_id] = { status: 'available' };
+    }
+  }
+  for (const id of tourIds) {
+    if (!seen.has(id)) result[id] = { status: 'unrestricted' };
+  }
+  return result;
 }
