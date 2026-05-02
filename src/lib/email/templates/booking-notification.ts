@@ -18,6 +18,11 @@ export type BookingNotificationData = {
     children?: number;
     date?: string;
     price: number;
+    nights?: number;
+    checkIn?: string;
+    checkOut?: string;
+    units?: number;
+    addonsLabel?: string;
   }>;
   totalPrice: number;
   discountAmount?: number;

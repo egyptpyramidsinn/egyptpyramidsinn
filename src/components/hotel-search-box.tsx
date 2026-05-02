@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useRouter } from 'next/navigation';
+import { useSettings } from '@/components/providers/settings-provider';
+import { getHotelHubHref } from '@/lib/routing/hotel-links';
 
 interface HotelSearchBoxProps {
   className?: string;
@@ -22,6 +24,7 @@ export function HotelSearchBox({
   maxGuests = 10,
 }: HotelSearchBoxProps) {
   const router = useRouter();
+  const settings = useSettings();
   const [date, setDate] = React.useState<DateRange | undefined>({
     from: new Date(),
     to: addDays(new Date(), 1),
@@ -39,7 +42,8 @@ export function HotelSearchBox({
     params.append('children', children.toString());
     params.append('rooms', rooms.toString());
 
-    router.push(`/hotels/default?${params.toString()}`);
+    const target = getHotelHubHref(settings?.data);
+    router.push(`${target}?${params.toString()}`);
   };
 
   return (

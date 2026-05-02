@@ -83,6 +83,7 @@ export default function CheckoutSuccessPage() {
   const { t } = useLanguage();
   const [paymentState, setPaymentState] = useState<PaymentState>('checking');
   const [booking, setBooking] = useState<Booking | null>(null);
+  const [hasVerifiedOnlineConfirmation, setHasVerifiedOnlineConfirmation] = useState(false);
 
   const merchantOrderId = useMemo(() => {
     return (
@@ -108,17 +109,23 @@ export default function CheckoutSuccessPage() {
   }, [searchParams]);
 
   useEffect(() => {
+    setHasVerifiedOnlineConfirmation(false);
+
     if (!merchantOrderId || !paymentStatusParam) return;
+
     let cancelled = false;
     void (async () => {
       try {
-        await finalizeKashierRedirect({
+        const result = await finalizeKashierRedirect({
           merchantOrderId,
           paymentStatus: paymentStatusParam,
           signature: allParams.signature ?? null,
           signatureKeys: allParams.signatureKeys ?? null,
           params: allParams,
         });
+        if (!cancelled && result.status === 'Confirmed') {
+          setHasVerifiedOnlineConfirmation(true);
+        }
       } catch (err) {
         if (!cancelled) console.error('Failed to finalize Kashier redirect:', err);
       }
@@ -149,6 +156,11 @@ export default function CheckoutSuccessPage() {
       setBooking(booking);
 
       if (booking.status === 'Confirmed') {
+        if (booking.paymentMethod === 'online' && !hasVerifiedOnlineConfirmation) {
+          setPaymentState('pending');
+          return;
+        }
+
         setPaymentState('confirmed');
         clearCart();
         // Clear any stored provisional booking id from the checkout flow.
@@ -192,14 +204,14 @@ export default function CheckoutSuccessPage() {
       cancelled = true;
       if (intervalId !== undefined) window.clearInterval(intervalId);
     };
-  }, [merchantOrderId, clearCart]);
+  }, [merchantOrderId, clearCart, hasVerifiedOnlineConfirmation]);
 
   const heroTitle =
     paymentState === 'confirmed'
       ? t('success.confirmed')
       : paymentState === 'cancelled'
         ? t('success.failed')
-        : paymentState === 'pending'
+        : paymentState === 'pending' || paymentState === 'checking'
           ? t('success.pending')
           : t('success.complete');
 
@@ -208,9 +220,21 @@ export default function CheckoutSuccessPage() {
       ? t('success.confirmedDesc')
       : paymentState === 'cancelled'
         ? t('success.failedDesc')
-        : paymentState === 'pending'
+        : paymentState === 'pending' || paymentState === 'checking'
           ? t('success.pendingDesc')
           : t('success.completeDesc');
+
+  const isVerifiedOnlineConfirmedBooking =
+    paymentState === 'confirmed' &&
+    booking?.paymentMethod === 'online' &&
+    hasVerifiedOnlineConfirmation;
+
+  const confirmedCardTitle = isVerifiedOnlineConfirmedBooking
+    ? t('success.paymentConfirmed')
+    : t('success.confirmed');
+
+  const confirmedTotalLabel =
+    booking?.paymentMethod === 'cash' ? t('success.totalDueOnArrival') : t('success.totalPaid');
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-10 py-10">
@@ -275,7 +299,7 @@ export default function CheckoutSuccessPage() {
             <div className="space-y-0.5">
               <CardTitle className="text-2xl">
                 {paymentState === 'confirmed'
-                  ? t('success.paymentConfirmed')
+                  ? confirmedCardTitle
                   : paymentState === 'cancelled'
                     ? t('success.paymentNotCompleted')
                     : t('success.processingPayment')}
@@ -291,7 +315,7 @@ export default function CheckoutSuccessPage() {
             <div className="flex flex-wrap items-center gap-2 pt-1">
               {booking.paymentMethod && <PaymentMethodBadge method={booking.paymentMethod} />}
               <Badge variant="secondary" className="font-mono">
-                Total paid:{' '}
+                {confirmedTotalLabel}:{' '}
                 {new Intl.NumberFormat('en-US', {
                   style: 'currency',
                   currency: 'USD',

@@ -24,6 +24,37 @@ export type AgencyHealthRow = {
   lastAdminLoginAt: string | null;
 };
 
+/**
+ * Checks whether the currently authenticated user is a super admin.
+ *
+ * Primary check: queries the `profiles` table for `is_super_admin = true`.
+ * Fallback: compares email against `NEXT_PUBLIC_SUPER_ADMIN_EMAIL` env var so
+ * that existing deployments keep working until the DB flag is set.
+ */
+export async function checkSuperAdmin(): Promise<boolean> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return false;
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('is_super_admin')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  if (profile?.is_super_admin === true) return true;
+
+  const superAdminEmail = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL;
+  if (superAdminEmail && user.email) {
+    return user.email.toLowerCase() === superAdminEmail.toLowerCase();
+  }
+
+  return false;
+}
+
 export async function getPlatformStats(): Promise<PlatformStats> {
   const supabase = await createClient();
 

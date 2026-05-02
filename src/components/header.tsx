@@ -37,6 +37,7 @@ import { useCurrency, currencies } from '@/hooks/use-currency';
 import { cn } from '@/lib/utils';
 import { AgencySettingsData } from '@/lib/supabase/agency-content';
 import { useSettings } from '@/components/providers/settings-provider';
+import { getHotelHubHref } from '@/lib/routing/hotel-links';
 
 type SettingsData = AgencySettingsData;
 
@@ -276,7 +277,7 @@ export function Header() {
         ...(settings?.data?.modules?.hotels !== false
           ? [
               {
-                href: settings?.data?.singleHotelMode ? '/hotels/default' : '/hotels',
+                href: getHotelHubHref(settings?.data),
                 label: settings?.data?.singleHotelMode ? t('nav.ourRooms') : t('nav.hotels'),
               },
             ]
@@ -374,10 +375,8 @@ export function Header() {
                   ) : null}
                   {settings?.data?.modules?.hotels !== false ? (
                     <Link
-                      href={settings?.data?.singleHotelMode ? '/hotels/default' : '/hotels'}
-                      className={navLinkClass(
-                        settings?.data?.singleHotelMode ? '/hotels/default' : '/hotels'
-                      )}
+                      href={getHotelHubHref(settings?.data)}
+                      className={navLinkClass(getHotelHubHref(settings?.data))}
                     >
                       {settings?.data?.singleHotelMode ? t('nav.ourRooms') : t('nav.hotels')}
                     </Link>

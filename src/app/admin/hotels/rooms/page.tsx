@@ -31,6 +31,9 @@ export default async function AdminHotelRoomsPage() {
               Add Room
             </Link>
           </Button>
+          <Button asChild variant="outline">
+            <Link href="/admin/hotels/pricing-rules">Pricing Rules</Link>
+          </Button>
           <Button asChild>
             <Link href="/admin/hotels/availability">Availability</Link>
           </Button>

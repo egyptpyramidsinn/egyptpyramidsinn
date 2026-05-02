@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { checkSuperAdmin } from '@/app/super-admin/layout';
+import { checkSuperAdmin } from '@/lib/supabase/super-admin';
 import { redirect } from 'next/navigation';
 import { AgencyDetailClient } from './agency-detail-client';
 import { getAgencyAuditLog } from '@/lib/supabase/audit-log';

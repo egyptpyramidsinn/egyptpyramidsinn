@@ -51,28 +51,12 @@ import { NotificationBell } from '@/components/admin/notification-bell';
 import type { AgencyNotification } from '@/lib/supabase/notifications';
 import { useAdminLanguage } from '@/hooks/use-admin-language';
 
-// const menuItems = [
-//   { href: "/admin/dashboard", label: "Dashboard", icon: Home },
-//   { href: "/admin/tours", label: "Tours", icon: Globe },
-//   { href: "/admin/bookings", label: "Bookings", icon: Calendar },
-//   { href: "/admin/customers", label: "Customers", icon: Users },
-//   { href: "/admin/blog", label: "Blog", icon: Newspaper },
-//   {
-//     href: "/admin/home-page-editor",
-//     label: "Home Page Editor",
-//     icon: LayoutDashboard,
-//   },
-//   { href: "/admin/upsell-items", label: "Upsell Items", icon: Tag },
-//   { href: "/admin/promotions", label: "Promotions", icon: Percent },
-//   { href: "/admin/contact-messages", label: "Contact Messages", icon: Mail },
-//   { href: "/admin/settings", label: "Settings", icon: Settings },
-// ];
-
 const getPageTitle = (pathname: string, t: (k: string) => string) => {
   if (pathname.startsWith('/admin/dashboard')) return t('admin.dashboard');
   if (pathname.startsWith('/admin/tours')) return t('admin.tours');
   if (pathname.startsWith('/admin/hotels/bookings')) return t('admin.hotelBookings');
   if (pathname.startsWith('/admin/hotels/rooms')) return t('admin.roomTypes');
+  if (pathname.startsWith('/admin/hotels/pricing-rules')) return t('admin.pricingRules');
   if (pathname.startsWith('/admin/hotels/availability')) return t('admin.availabilityRates');
   if (pathname.startsWith('/admin/hotels')) return t('admin.hotelsDashboard');
   if (pathname.startsWith('/admin/bookings')) return t('admin.bookings');
@@ -138,8 +122,9 @@ export function AdminSidebar({
       items: [
         { href: '/admin/hotels', label: t('admin.hotelsDashboard'), icon: Building2 },
         { href: '/admin/hotels/rooms', label: t('admin.roomTypes'), icon: LayoutDashboard },
+        { href: '/admin/hotels/pricing-rules', label: t('admin.pricingRules'), icon: Percent },
         { href: '/admin/hotels/availability', label: t('admin.availability'), icon: Calendar },
-        { href: '/admin/hotels/bookings', label: t('admin.bookings'), icon: Calendar },
+        { href: '/admin/hotels/bookings', label: t('admin.hotelBookings'), icon: Calendar },
       ],
     },
     {
@@ -174,6 +159,7 @@ export function AdminSidebar({
       [
         '/admin/hotels',
         '/admin/hotels/rooms',
+        '/admin/hotels/pricing-rules',
         '/admin/hotels/availability',
         '/admin/hotels/bookings',
       ].includes(href) &&
@@ -182,6 +168,17 @@ export function AdminSidebar({
       return false;
     return true;
   };
+
+  const visibleGroups = groups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => shouldShowItem(item.href)),
+    }))
+    .filter((group) => group.items.length > 0);
+  const activeMenuHref = visibleGroups
+    .flatMap((group) => group.items.map((item) => item.href))
+    .filter((href) => pathname === href || pathname.startsWith(`${href}/`))
+    .sort((a, b) => b.length - a.length)[0];
 
   return (
     <SidebarProvider>
@@ -196,45 +193,37 @@ export function AdminSidebar({
           </div>
         </SidebarHeader>
         <SidebarContent>
-          {groups.map((group) => {
-            const visibleItems = group.items.filter((item) => shouldShowItem(item.href));
-            if (visibleItems.length === 0) return null;
-
-            return (
-              <SidebarGroup key={group.label}>
-                <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
-                <SidebarGroupContent>
-                  <SidebarMenu>
-                    {visibleItems.map((item) => {
-                      const isPendingBookings =
-                        item.href === '/admin/bookings' &&
-                        !!pendingBookingsCount &&
-                        pendingBookingsCount > 0;
-                      return (
-                        <SidebarMenuItem key={item.href}>
-                          <SidebarMenuButton
-                            href={item.href}
-                            isActive={pathname.startsWith(item.href)}
-                          >
-                            <item.icon />
-                            <span>{item.label}</span>
-                            {isPendingBookings && (
-                              <Badge
-                                variant="destructive"
-                                className="ml-auto h-5 min-w-5 px-1 text-xs"
-                              >
-                                {pendingBookingsCount}
-                              </Badge>
-                            )}
-                          </SidebarMenuButton>
-                        </SidebarMenuItem>
-                      );
-                    })}
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              </SidebarGroup>
-            );
-          })}
+          {visibleGroups.map((group) => (
+            <SidebarGroup key={group.label}>
+              <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {group.items.map((item) => {
+                    const isPendingBookings =
+                      item.href === '/admin/bookings' &&
+                      !!pendingBookingsCount &&
+                      pendingBookingsCount > 0;
+                    return (
+                      <SidebarMenuItem key={item.href}>
+                        <SidebarMenuButton href={item.href} isActive={activeMenuHref === item.href}>
+                          <item.icon />
+                          <span>{item.label}</span>
+                          {isPendingBookings && (
+                            <Badge
+                              variant="destructive"
+                              className="ml-auto h-5 min-w-5 px-1 text-xs"
+                            >
+                              {pendingBookingsCount}
+                            </Badge>
+                          )}
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    );
+                  })}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          ))}
         </SidebarContent>
       </Sidebar>
       <SidebarInset>

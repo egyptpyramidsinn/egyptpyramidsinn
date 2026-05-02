@@ -1,6 +1,8 @@
 export * from './agency';
 export * from './hotel';
 
+import type { RoomCartItem } from './hotel';
+
 export type Review = {
   id: string;
   agencyId: string;
@@ -118,16 +120,40 @@ export type BookingItem = {
   };
 };
 
-export type CartItem = {
-  product: Tour | UpsellItem;
-  productType: 'tour' | 'upsell';
-  packageId?: string; // New: selected package ID
-  packageName?: string; // New: selected package name
-  adults?: number; // Only for tours
-  children?: number; // Only for tours
-  date?: Date; // Only for tours
-  quantity?: number; // For upsell items, if they can have quantity (e.g., 2 SIM cards)
+/**
+ * Discriminated cart item union. The discriminator is `productType`.
+ *
+ * Tour and upsell variants preserve the legacy shape exactly; existing
+ * callers that branch on `item.productType === 'tour' | 'upsell'` continue
+ * to work unchanged.
+ *
+ * The room variant (`RoomCartItem` from `./hotel`) carries hotel-specific
+ * pricing/date data and a stable `lineId` so multiple distinct stays of the
+ * same room type can coexist in the cart.
+ */
+export type TourCartItem = {
+  productType: 'tour';
+  product: Tour;
+  packageId?: string;
+  packageName?: string;
+  adults?: number;
+  children?: number;
+  date?: Date;
+  quantity?: never;
 };
+
+export type UpsellCartItem = {
+  productType: 'upsell';
+  product: UpsellItem;
+  packageId?: string;
+  packageName?: string;
+  quantity?: number;
+  adults?: never;
+  children?: never;
+  date?: never;
+};
+
+export type CartItem = TourCartItem | UpsellCartItem | RoomCartItem;
 
 export type Booking = {
   id: string;

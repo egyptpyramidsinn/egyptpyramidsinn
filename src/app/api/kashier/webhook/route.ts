@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { verifyKashierSignature } from '@/lib/kashier';
-import { applyBookingStatusChange } from '@/lib/supabase/bookings';
+import { applyVerifiedPaymentStatusChange } from '@/lib/supabase/bookings';
+import type { Booking } from '@/types';
 
 type KashierWebhookPayload = {
   event?: string;
@@ -10,6 +11,18 @@ type KashierWebhookPayload = {
     signatureKeys?: string[];
   };
 };
+
+type PaymentFinalStatus = Extract<Booking['status'], 'Confirmed' | 'Cancelled'>;
+
+const POSITIVE_STATUSES = new Set(['SUCCESS', 'PAID', 'APPROVED', 'CAPTURED']);
+const NEGATIVE_STATUSES = new Set(['FAILED', 'FAILURE', 'CANCELLED', 'CANCELED', 'DECLINED']);
+
+function mapPaymentStatus(raw: string): PaymentFinalStatus | null {
+  const upper = raw.trim().toUpperCase();
+  if (POSITIVE_STATUSES.has(upper)) return 'Confirmed';
+  if (NEGATIVE_STATUSES.has(upper)) return 'Cancelled';
+  return null;
+}
 
 export async function POST(request: Request) {
   let payload: KashierWebhookPayload | null = null;
@@ -45,19 +58,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false }, { status: 400 });
   }
 
-  const nextStatus =
-    paymentStatus.toUpperCase() === 'SUCCESS'
-      ? 'Confirmed'
-      : paymentStatus.toUpperCase() === 'FAILED' || paymentStatus.toUpperCase() === 'FAILURE'
-        ? 'Cancelled'
-        : 'Pending';
+  const nextStatus = mapPaymentStatus(paymentStatus);
 
-  if (nextStatus === 'Pending') {
+  if (!nextStatus) {
     return NextResponse.json({ ok: true });
   }
 
   try {
-    await applyBookingStatusChange(merchantOrderId, nextStatus, { scopeToCurrentAgency: false });
+    await applyVerifiedPaymentStatusChange(merchantOrderId, nextStatus);
   } catch (err) {
     console.error('Kashier webhook: failed to apply status change', err);
     return NextResponse.json({ ok: false }, { status: 500 });

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useActionState, useState, useEffect } from 'react';
+import React, { useActionState, useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useFormStatus } from 'react-dom';
@@ -19,9 +19,11 @@ import {
   CardDescription,
 } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { Trash2, ShoppingCart, Lightbulb, Loader2, PlusCircle } from 'lucide-react';
+import { Trash2, ShoppingCart, Lightbulb, Loader2, PlusCircle, AlertTriangle } from 'lucide-react';
 import { getAiSuggestions } from '@/app/actions';
 import { getUpsellItems } from '@/lib/supabase/upsell-items';
+import { getCartRoomLookup } from '@/lib/supabase/hotels';
+import { RoomCartLine } from '@/components/cart/room-cart-line';
 import type { CartItem, UpsellItem, Tour } from '@/types';
 import { format } from 'date-fns';
 import {
@@ -36,7 +38,7 @@ function SubmitButton() {
   const { pending } = useFormStatus();
   const { t } = useLanguage();
   return (
-    <Button type="submit" disabled={pending}>
+    <Button type="submit" disabled={pending} className="h-11 w-full justify-center">
       {pending ? (
         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
       ) : (
@@ -51,6 +53,7 @@ export default function CartPage() {
   const {
     cartItems,
     removeFromCart,
+    removeRoomItem,
     getCartTotal,
     addToCart,
     clearCart,
@@ -92,6 +95,50 @@ export default function CartPage() {
     };
     fetchUpsells();
   }, []);
+
+  const roomItems = useMemo(
+    () =>
+      cartItems.filter(
+        (i): i is Extract<CartItem, { productType: 'room' }> => i.productType === 'room'
+      ),
+    [cartItems]
+  );
+
+  const roomHotelIds = useMemo(
+    () => Array.from(new Set(roomItems.map((i) => i.hotelId))),
+    [roomItems]
+  );
+
+  const [hotelLookup, setHotelLookup] = useState<{
+    hotels: Record<string, { name: string; slug: string }>;
+    singleHotelMode: boolean;
+  }>({ hotels: {}, singleHotelMode: false });
+
+  useEffect(() => {
+    if (roomHotelIds.length === 0) {
+      setHotelLookup({ hotels: {}, singleHotelMode: false });
+      return;
+    }
+    let cancelled = false;
+    void getCartRoomLookup(roomHotelIds)
+      .then((res) => {
+        if (cancelled) return;
+        const map: Record<string, { name: string; slug: string }> = {};
+        for (const h of res.hotels) map[h.id] = { name: h.name, slug: h.slug };
+        setHotelLookup({ hotels: map, singleHotelMode: res.singleHotelMode });
+      })
+      .catch(() => {
+        // Non-blocking; cart still renders without hotel name/edit link.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [roomHotelIds]);
+
+  const currencyWarning = useMemo(() => {
+    const set = new Set(roomItems.map((i) => i.currency));
+    return set.size > 1 ? Array.from(set).join(', ') : null;
+  }, [roomItems]);
 
   const tourItems = cartItems.filter((item) => item.productType === 'tour') as Array<
     CartItem & { product: Tour }
@@ -263,95 +310,123 @@ export default function CartPage() {
             </div>
 
             <div className="space-y-4">
-              {cartItems.map((item) => {
-                const imageSrc =
-                  item.productType === 'tour'
-                    ? (item.product as Tour).images?.[0] || '/placeholder.png'
-                    : (item.product as UpsellItem).imageUrl || '/placeholder-upsell.png';
-                const itemTotal = getItemTotal(item);
+              {currencyWarning ? (
+                <div className="flex items-start gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+                  <AlertTriangle className="mt-0.5 h-4 w-4" />
+                  <span>
+                    Your cart contains items in multiple currencies ({currencyWarning}). Totals are
+                    displayed in your selected currency; the agency will charge in its primary
+                    currency at checkout.
+                  </span>
+                </div>
+              ) : null}
+              {cartItems
+                .filter(
+                  (item): item is Exclude<typeof item, { productType: 'room' }> =>
+                    item.productType !== 'room'
+                )
+                .map((item) => {
+                  const imageSrc =
+                    item.productType === 'tour'
+                      ? (item.product as Tour).images?.[0] || '/placeholder.png'
+                      : (item.product as UpsellItem).imageUrl || '/placeholder-upsell.png';
+                  const itemTotal = getItemTotal(item);
 
-                return (
-                  <Card
-                    key={getCartItemKey(item)}
-                    className="overflow-hidden rounded-3xl border bg-card transition-shadow hover:shadow-lg"
-                  >
-                    <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:gap-5">
-                      <div className="relative h-44 w-full overflow-hidden rounded-2xl border sm:h-28 sm:w-40">
-                        <Image
-                          src={imageSrc}
-                          alt={item.product.name}
-                          fill
-                          className="object-cover"
-                          sizes="(max-width: 640px) 100vw, 160px"
-                          data-ai-hint={`${item.product.name} egypt`}
-                        />
-                      </div>
-
-                      <div className="flex-1 space-y-2">
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                          <div className="space-y-1">
-                            <p className="text-lg font-semibold leading-snug">
-                              {item.product.name}
-                            </p>
-                            <div className="flex flex-wrap items-center gap-2">
-                              <Badge variant="secondary">
-                                {item.productType === 'tour'
-                                  ? t('cart.tourBadge')
-                                  : t('cart.addonBadge')}
-                              </Badge>
-                              {item.productType === 'tour' && (
-                                <Badge variant="outline">
-                                  {(item.product as Tour).destination}
-                                </Badge>
-                              )}
-                              {item.packageName && (
-                                <Badge variant="outline">{item.packageName}</Badge>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex items-center justify-between gap-3 sm:flex-col sm:items-end sm:justify-start">
-                            <p className="text-lg font-semibold text-primary">
-                              {formatPrice(itemTotal)}
-                            </p>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() =>
-                                removeFromCart(item.product.id, item.productType, item.packageId)
-                              }
-                            >
-                              <Trash2 className="h-5 w-5 text-destructive" />
-                              <span className="sr-only">Remove item</span>
-                            </Button>
-                          </div>
+                  return (
+                    <Card
+                      key={getCartItemKey(item)}
+                      className="overflow-hidden rounded-3xl border bg-card transition-shadow hover:shadow-lg"
+                    >
+                      <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:gap-5">
+                        <div className="relative h-44 w-full overflow-hidden rounded-2xl border sm:h-28 sm:w-40">
+                          <Image
+                            src={imageSrc}
+                            alt={item.product.name}
+                            fill
+                            className="object-cover"
+                            sizes="(max-width: 640px) 100vw, 160px"
+                            data-ai-hint={`${item.product.name} egypt`}
+                          />
                         </div>
 
-                        {item.productType === 'tour' && (
-                          <div className="grid gap-2 rounded-2xl border bg-muted/30 p-4 sm:grid-cols-2">
-                            <div className="space-y-0.5">
-                              <p className="text-xs font-medium text-muted-foreground">
-                                {t('cart.date')}
+                        <div className="flex-1 space-y-2">
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="space-y-1">
+                              <p className="text-lg font-semibold leading-snug">
+                                {item.product.name}
                               </p>
-                              <p className="text-sm font-medium">
-                                {item.date
-                                  ? format(new Date(item.date), 'PPP')
-                                  : t('cart.notSelected')}
-                              </p>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Badge variant="secondary">
+                                  {item.productType === 'tour'
+                                    ? t('cart.tourBadge')
+                                    : t('cart.addonBadge')}
+                                </Badge>
+                                {item.productType === 'tour' && (
+                                  <Badge variant="outline">
+                                    {(item.product as Tour).destination}
+                                  </Badge>
+                                )}
+                                {item.packageName && (
+                                  <Badge variant="outline">{item.packageName}</Badge>
+                                )}
+                              </div>
                             </div>
-                            <div className="space-y-0.5">
-                              <p className="text-xs font-medium text-muted-foreground">
-                                {t('cart.guests')}
+                            <div className="flex items-center justify-between gap-3 sm:flex-col sm:items-end sm:justify-start">
+                              <p className="text-lg font-semibold text-primary">
+                                {formatPrice(itemTotal)}
                               </p>
-                              <p className="text-sm font-medium">
-                                {(item.adults ?? 0).toString()} Adults,{' '}
-                                {(item.children ?? 0).toString()} Children
-                              </p>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() =>
+                                  removeFromCart(item.product.id, item.productType, item.packageId)
+                                }
+                              >
+                                <Trash2 className="h-5 w-5 text-destructive" />
+                                <span className="sr-only">Remove item</span>
+                              </Button>
                             </div>
                           </div>
-                        )}
+
+                          {item.productType === 'tour' && (
+                            <div className="grid gap-2 rounded-2xl border bg-muted/30 p-4 sm:grid-cols-2">
+                              <div className="space-y-0.5">
+                                <p className="text-xs font-medium text-muted-foreground">
+                                  {t('cart.date')}
+                                </p>
+                                <p className="text-sm font-medium">
+                                  {item.date
+                                    ? format(new Date(item.date), 'PPP')
+                                    : t('cart.notSelected')}
+                                </p>
+                              </div>
+                              <div className="space-y-0.5">
+                                <p className="text-xs font-medium text-muted-foreground">
+                                  {t('cart.guests')}
+                                </p>
+                                <p className="text-sm font-medium">
+                                  {(item.adults ?? 0).toString()} Adults,{' '}
+                                  {(item.children ?? 0).toString()} Children
+                                </p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </Card>
+                    </Card>
+                  );
+                })}
+              {roomItems.map((roomItem) => {
+                const hotel = hotelLookup.hotels[roomItem.hotelId];
+                return (
+                  <RoomCartLine
+                    key={roomItem.lineId}
+                    item={roomItem}
+                    hotelName={hotel?.name}
+                    hotelSlug={hotel?.slug}
+                    linkContext={{ singleHotelMode: hotelLookup.singleHotelMode }}
+                    onRemove={removeRoomItem}
+                  />
                 );
               })}
             </div>
@@ -457,10 +532,10 @@ export default function CartPage() {
                     return (
                       <div
                         key={item.id}
-                        className="flex flex-col gap-3 rounded-2xl border bg-background p-4 sm:flex-row sm:items-center sm:justify-between"
+                        className="grid gap-3 rounded-2xl border bg-background p-4"
                       >
-                        <div className="flex items-center gap-3">
-                          <div className="relative h-12 w-12 overflow-hidden rounded-xl border">
+                        <div className="flex min-w-0 items-start gap-3">
+                          <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl border">
                             <Image
                               src={item.imageUrl || '/placeholder-upsell.png'}
                               alt={item.name}
@@ -469,7 +544,7 @@ export default function CartPage() {
                               sizes="48px"
                             />
                           </div>
-                          <div>
+                          <div className="min-w-0 flex-1">
                             <p className="font-semibold leading-snug">{item.name}</p>
                             {item.description ? (
                               <p className="text-sm text-muted-foreground line-clamp-2">
@@ -478,7 +553,7 @@ export default function CartPage() {
                             ) : null}
                           </div>
                         </div>
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+                        <div className="grid w-full gap-2">
                           {item.variants && item.variants.length > 0 ? (
                             <Select
                               value={selectValue}
@@ -486,7 +561,7 @@ export default function CartPage() {
                                 setSelectedUpsellVariant((prev) => ({ ...prev, [item.id]: value }))
                               }
                             >
-                              <SelectTrigger className="w-full sm:w-56">
+                              <SelectTrigger className="h-11 w-full min-w-0">
                                 <SelectValue placeholder={t('cart.selectOption')} />
                               </SelectTrigger>
                               <SelectContent>
@@ -506,25 +581,30 @@ export default function CartPage() {
                               </SelectContent>
                             </Select>
                           ) : null}
-                          <span className="font-semibold">{formatPrice(display.price)}</span>
-                          <Button
-                            size="sm"
-                            onClick={() =>
-                              addToCart(
-                                item,
-                                'upsell',
-                                undefined,
-                                undefined,
-                                undefined,
-                                1,
-                                display.variantId,
-                                display.variantName
-                              )
-                            }
-                            disabled={alreadyInCart}
-                          >
-                            <PlusCircle className="mr-1 h-4 w-4" /> {t('cart.addBtn')}
-                          </Button>
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="min-w-0 break-words text-sm font-semibold text-primary">
+                              {formatPrice(display.price)}
+                            </span>
+                            <Button
+                              size="sm"
+                              className="h-11 flex-1 px-3"
+                              onClick={() =>
+                                addToCart(
+                                  item,
+                                  'upsell',
+                                  undefined,
+                                  undefined,
+                                  undefined,
+                                  1,
+                                  display.variantId,
+                                  display.variantName
+                                )
+                              }
+                              disabled={alreadyInCart}
+                            >
+                              <PlusCircle className="mr-1 h-4 w-4" /> {t('cart.addBtn')}
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     );
@@ -539,15 +619,12 @@ export default function CartPage() {
                 <CardDescription>{t('cart.getIdeas')}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <form
-                  action={formAction}
-                  className="flex flex-col gap-3 sm:flex-row sm:items-center"
-                >
+                <form action={formAction} className="grid gap-3">
                   {tourDescriptions.map((desc, i) => (
                     <input type="hidden" key={i} name="descriptions" value={desc} />
                   ))}
                   <SubmitButton />
-                  <Button asChild variant="outline">
+                  <Button asChild variant="outline" className="h-11 w-full justify-center">
                     <Link href="/tours">{t('cart.browseToursBtn')}</Link>
                   </Button>
                 </form>

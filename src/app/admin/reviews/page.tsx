@@ -1,8 +1,8 @@
-import { getReviews, getReviewStats } from '@/lib/supabase/reviews';
+import { getReviews } from '@/lib/supabase/reviews';
 import { ReviewsClient } from './reviews-client';
 
 export default async function AdminReviewsPage() {
-  const [reviews, stats] = await Promise.all([getReviews(), getReviewStats()]);
+  const reviews = await getReviews();
 
   return (
     <div className="space-y-6">
@@ -10,7 +10,7 @@ export default async function AdminReviewsPage() {
         <h2 className="text-2xl font-bold tracking-tight">Reviews & Ratings</h2>
         <p className="text-muted-foreground">Moderate customer reviews for tours and hotels.</p>
       </div>
-      <ReviewsClient initialReviews={reviews} stats={stats} />
+      <ReviewsClient initialReviews={reviews} />
     </div>
   );
 }

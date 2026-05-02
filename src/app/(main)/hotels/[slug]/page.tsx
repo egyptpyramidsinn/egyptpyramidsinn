@@ -1,10 +1,16 @@
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
-import { getPublicHotelBySlug, getPublicRoomTypesByHotelId } from '@/lib/supabase/hotels';
+import { notFound, redirect } from 'next/navigation';
+import {
+  getPublicHotelBySlug,
+  getPublicHotels,
+  getPublicRoomTypesByHotelId,
+} from '@/lib/supabase/hotels';
 import { getCurrentAgency } from '@/lib/supabase/agencies';
+import { getAgencySettings } from '@/lib/supabase/agency-content';
 import { getApprovedReviewsForHotel } from '@/lib/supabase/reviews';
 import { ReviewForm } from '@/components/review-form';
 import { ReviewsDisplay } from '@/components/reviews-display';
+import { RoomsGrid } from '@/components/rooms-grid';
 
 interface HotelDetailsPageProps {
   params: Promise<{
@@ -14,15 +20,28 @@ interface HotelDetailsPageProps {
 
 export default async function HotelDetailsPage({ params }: HotelDetailsPageProps) {
   const { slug } = await params;
-  const hotel = await getPublicHotelBySlug(slug);
+  const settings = await getAgencySettings();
+  const singleHotelMode = settings?.data?.singleHotelMode === true;
+
+  if (singleHotelMode) {
+    redirect('/hotel');
+  }
+
+  const agency = await getCurrentAgency();
+  const requestedSlug = slug === 'default' ? (agency?.slug ?? slug) : slug;
+  let hotel = await getPublicHotelBySlug(requestedSlug);
+
+  if (!hotel && slug === 'default') {
+    const hotels = await getPublicHotels({ skipTranslation: true });
+    hotel = hotels[0] ?? null;
+  }
 
   if (!hotel) {
     notFound();
   }
 
-  const [roomTypes, agency, reviews] = await Promise.all([
+  const [roomTypes, reviews] = await Promise.all([
     getPublicRoomTypesByHotelId(hotel.id),
-    getCurrentAgency(),
     getApprovedReviewsForHotel(hotel.id),
   ]);
 
@@ -47,28 +66,7 @@ export default async function HotelDetailsPage({ params }: HotelDetailsPageProps
 
       <div className="space-y-4">
         <h2 className="text-xl font-semibold">Rooms</h2>
-        {roomTypes.length === 0 ? (
-          <div className="rounded-lg border bg-muted/30 p-6 text-sm text-muted-foreground">
-            No rooms available.
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {roomTypes.map((room) => (
-              <div key={room.id} className="rounded-lg border p-5">
-                <div className="space-y-1">
-                  <p className="text-lg font-medium">{room.name}</p>
-                  <p className="text-sm text-muted-foreground">
-                    Max {room.maxAdults} adults
-                    {room.maxChildren ? `, ${room.maxChildren} children` : ''}
-                  </p>
-                </div>
-                {room.description ? (
-                  <p className="mt-3 text-sm text-muted-foreground">{room.description}</p>
-                ) : null}
-              </div>
-            ))}
-          </div>
-        )}
+        <RoomsGrid rooms={roomTypes} hotelSlug={hotel.slug} singleHotelMode={false} />
       </div>
 
       {/* Reviews Section */}

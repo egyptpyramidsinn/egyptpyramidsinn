@@ -19,6 +19,12 @@ export type BookingConfirmationData = {
     children?: number;
     date?: string;
     price: number;
+    /** Room-specific fields (optional). When present, a stay block is rendered instead of a tour-style date line. */
+    nights?: number;
+    checkIn?: string;
+    checkOut?: string;
+    units?: number;
+    addonsLabel?: string;
   }>;
   subtotal: number;
   discountAmount?: number;
@@ -57,12 +63,21 @@ export function renderBookingConfirmationEmail(data: BookingConfirmationData): s
       ]
         .filter(Boolean)
         .join(', ');
+      const stayLine =
+        item.checkIn && item.checkOut
+          ? `<br><span style="color:#666;font-size:13px;">🏨 ${item.checkIn} → ${item.checkOut}${item.nights ? ` · ${item.nights} night${item.nights > 1 ? 's' : ''}` : ''}${item.units && item.units > 1 ? ` · ${item.units} rooms` : ''}</span>`
+          : '';
+      const addonsLine = item.addonsLabel
+        ? `<br><span style="color:#666;font-size:13px;">Add-ons: ${item.addonsLabel}</span>`
+        : '';
       return `
         <tr>
           <td style="padding: 12px 0; border-bottom: 1px solid #f0f0f0;">
             <strong style="color: #111;">${item.name}</strong>
             ${item.packageName ? `<br><span style="color:#666;font-size:13px;">Package: ${item.packageName}</span>` : ''}
             ${pax ? `<br><span style="color:#666;font-size:13px;">${pax}</span>` : ''}
+            ${stayLine}
+            ${addonsLine}
             ${item.date ? `<br><span style="color:#666;font-size:13px;">📅 ${new Date(item.date).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'long', day: 'numeric' })}</span>` : ''}
           </td>
           <td style="padding: 12px 0; border-bottom: 1px solid #f0f0f0; text-align: right; white-space: nowrap; color: #111; font-weight: 600;">

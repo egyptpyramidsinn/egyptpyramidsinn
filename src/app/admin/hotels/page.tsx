@@ -1,13 +1,17 @@
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { getHotelBookings, getHotels, getRoomTypesByHotelId } from '@/lib/supabase/hotels';
+import {
+  getHotelDashboardOperationsSummary,
+  getHotels,
+  getRoomTypesByHotelId,
+} from '@/lib/supabase/hotels';
 import { BedDouble, Building2, Calendar, DollarSign } from 'lucide-react';
 
 export default async function AdminHotelsPage() {
-  const [hotels, bookings] = await Promise.all([
+  const [hotels, operationsSummary] = await Promise.all([
     getHotels({ skipTranslation: true }),
-    getHotelBookings(),
+    getHotelDashboardOperationsSummary(),
   ]);
 
   const roomsByHotel = await Promise.all(
@@ -22,13 +26,6 @@ export default async function AdminHotelsPage() {
     (sum, h) => sum + h.rooms.filter((r) => r.isActive).length,
     0
   );
-
-  const today = new Date().toISOString().slice(0, 10);
-  const upcomingBookings = bookings.filter((b) => b.status !== 'cancelled' && b.checkIn >= today);
-
-  const hotelRevenue = bookings
-    .filter((b) => b.status !== 'cancelled')
-    .reduce((sum, b) => sum + (b.total ?? 0), 0);
 
   const formatUSD = (value: number) => {
     try {
@@ -54,6 +51,9 @@ export default async function AdminHotelsPage() {
         <div className="flex gap-2">
           <Button asChild variant="outline">
             <Link href="/admin/hotels/rooms">Room Types</Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/admin/hotels/pricing-rules">Pricing Rules</Link>
           </Button>
           <Button asChild variant="outline">
             <Link href="/admin/hotels/availability">Availability</Link>
@@ -98,7 +98,7 @@ export default async function AdminHotelsPage() {
             <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{upcomingBookings.length}</div>
+            <div className="text-2xl font-bold">{operationsSummary.upcomingCheckIns}</div>
             <p className="text-xs text-muted-foreground">From today onward</p>
           </CardContent>
         </Card>
@@ -108,9 +108,9 @@ export default async function AdminHotelsPage() {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatUSD(hotelRevenue)}</div>
+            <div className="text-2xl font-bold">{formatUSD(operationsSummary.revenueTotal)}</div>
             <p className="text-xs text-muted-foreground">
-              {bookings.filter((b) => b.status !== 'cancelled').length} booking(s)
+              {operationsSummary.activeBookings} booking(s)
             </p>
           </CardContent>
         </Card>

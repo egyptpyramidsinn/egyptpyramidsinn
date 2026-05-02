@@ -3,7 +3,7 @@
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
-import { checkSuperAdmin } from './layout';
+import { checkSuperAdmin } from '@/lib/supabase/super-admin';
 import { logAudit } from '@/lib/supabase/audit-log';
 
 export async function createAgency(formData: FormData) {

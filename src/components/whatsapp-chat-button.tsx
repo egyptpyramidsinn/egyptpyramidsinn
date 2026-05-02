@@ -1,7 +1,11 @@
 'use client';
 
+import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { useLanguage } from '@/hooks/use-language';
+import { cn } from '@/lib/utils';
+
+const mobilePurchaseCtaRoutes = new Set(['/cart', '/checkout']);
 
 interface WhatsAppChatButtonProps {
   phone: string;
@@ -10,8 +14,10 @@ interface WhatsAppChatButtonProps {
 
 export function WhatsAppChatButton({ phone, message }: WhatsAppChatButtonProps) {
   const [hovered, setHovered] = useState(false);
+  const pathname = usePathname();
   const { t } = useLanguage();
   const chatLabel = t('whatsapp.chatWithUs');
+  const shouldClearMobilePurchaseCta = mobilePurchaseCtaRoutes.has(pathname);
 
   // Strip everything except digits and leading +
   const cleanPhone = phone.replace(/[^\d+]/g, '');
@@ -28,7 +34,10 @@ export function WhatsAppChatButton({ phone, message }: WhatsAppChatButtonProps) 
       aria-label={chatLabel}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      className="fixed bottom-6 right-6 z-50 flex items-center gap-3 group"
+      className={cn(
+        'group fixed bottom-5 right-4 z-50 flex items-center gap-3 sm:right-6 lg:bottom-6',
+        shouldClearMobilePurchaseCta && 'bottom-24'
+      )}
     >
       {/* Tooltip label */}
       <span

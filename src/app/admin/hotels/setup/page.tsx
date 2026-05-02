@@ -307,6 +307,9 @@ export default async function SetupHotelPage() {
               <Link href="/admin/hotels/availability">Set availability &amp; prices</Link>
             </Button>
             <Button asChild variant="outline" disabled={!hotel}>
+              <Link href="/admin/hotels/pricing-rules">Manage pricing rules</Link>
+            </Button>
+            <Button asChild variant="outline" disabled={!hotel}>
               <Link href="/admin/hotels/bookings">View bookings</Link>
             </Button>
             <div className="rounded-lg border bg-muted/30 p-4 text-sm text-muted-foreground">

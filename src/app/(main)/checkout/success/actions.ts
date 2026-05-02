@@ -1,9 +1,7 @@
 'use server';
 
-import { createAdminClient } from '@/lib/supabase/agency-users';
-import { getCurrentAgencyId } from '@/lib/supabase/agencies';
 import { verifyKashierSignature } from '@/lib/kashier';
-import { updateBookingStatus } from '@/lib/supabase/bookings';
+import { applyVerifiedPaymentStatusChange } from '@/lib/supabase/bookings';
 import type { Booking } from '@/types';
 
 type FinalizeInput = {
@@ -24,10 +22,11 @@ type FinalizeResult = {
 
 const POSITIVE_STATUSES = new Set(['SUCCESS', 'PAID', 'APPROVED', 'CAPTURED']);
 const NEGATIVE_STATUSES = new Set(['FAILED', 'FAILURE', 'CANCELLED', 'CANCELED', 'DECLINED']);
+type PaymentFinalStatus = Extract<Booking['status'], 'Confirmed' | 'Cancelled'>;
 
-function mapStatus(raw?: string | null): Booking['status'] | null {
+function mapStatus(raw?: string | null): PaymentFinalStatus | null {
   if (!raw) return null;
-  const upper = raw.toUpperCase();
+  const upper = raw.trim().toUpperCase();
   if (POSITIVE_STATUSES.has(upper)) return 'Confirmed';
   if (NEGATIVE_STATUSES.has(upper)) return 'Cancelled';
   return null;
@@ -36,7 +35,7 @@ function mapStatus(raw?: string | null): Booking['status'] | null {
 function parseSignatureKeys(input: FinalizeInput['signatureKeys']): string[] | null {
   if (!input) return null;
   if (Array.isArray(input)) {
-    return input.map((k) => String(k)).filter(Boolean);
+    return input.map((k) => String(k).trim()).filter(Boolean);
   }
   if (typeof input === 'string') {
     return input
@@ -47,12 +46,39 @@ function parseSignatureKeys(input: FinalizeInput['signatureKeys']): string[] | n
   return null;
 }
 
+async function verifyRedirectSignature(input: FinalizeInput) {
+  const keys = parseSignatureKeys(input.signatureKeys);
+
+  if (!input.signature?.trim()) {
+    return { ok: false as const, reason: 'missing_signature' as const };
+  }
+
+  if (!keys || keys.length === 0) {
+    return { ok: false as const, reason: 'missing_signature_keys' as const };
+  }
+
+  if (!input.params) {
+    return { ok: false as const, reason: 'missing_params' as const };
+  }
+
+  const data: Record<string, unknown> = {};
+  for (const key of keys) {
+    data[key] = input.params[key] ?? '';
+  }
+
+  return verifyKashierSignature({
+    signature: input.signature,
+    signatureKeys: keys,
+    data,
+  });
+}
+
 /**
  * Finalize a Kashier redirect on the checkout success page.
  *
  * Strategy:
- * 1. If the redirect URL carries a `signature` + `signatureKeys`, verify them.
- *    On signature mismatch, return without changing status.
+ * 1. Require `signature`, `signatureKeys`, and raw query params, then verify
+ *    them. Unsigned redirect query params are never trusted for finalization.
  * 2. Map `paymentStatus` to a booking status (only Confirmed/Cancelled).
  * 3. Only update when the booking is currently in `Pending` (never downgrade
  *    a Confirmed booking, never overwrite a Cancelled one).
@@ -71,56 +97,10 @@ export async function finalizeKashierRedirect(input: FinalizeInput): Promise<Fin
     return { status: 'unknown', changed: false, reason: 'unmapped_payment_status' };
   }
 
-  // Optional signature verification when Kashier returns one in the redirect.
-  if (input.signature) {
-    const keys = parseSignatureKeys(input.signatureKeys);
-    if (keys && keys.length > 0 && input.params) {
-      const data: Record<string, unknown> = {};
-      for (const key of keys) {
-        data[key] = input.params[key] ?? '';
-      }
-      const verification = await verifyKashierSignature({
-        signature: input.signature,
-        signatureKeys: keys,
-        data,
-      });
-      if (!verification.ok) {
-        return { status: 'unknown', changed: false, reason: 'signature_mismatch' };
-      }
-    }
+  const verification = await verifyRedirectSignature(input);
+  if (!verification.ok) {
+    return { status: 'unknown', changed: false, reason: verification.reason };
   }
 
-  const supabase = await createAdminClient();
-  const agencyId = await getCurrentAgencyId();
-
-  const { data: existing, error: fetchErr } = await supabase
-    .from('bookings')
-    .select('id, status')
-    .eq('id', input.merchantOrderId)
-    .eq('agency_id', agencyId)
-    .maybeSingle();
-
-  if (fetchErr || !existing) {
-    return { status: 'unknown', changed: false, reason: 'booking_not_found' };
-  }
-
-  const currentStatus = existing.status as Booking['status'];
-
-  // Idempotent: if already in target state, no change needed.
-  if (currentStatus === target) {
-    return { status: currentStatus, changed: false };
-  }
-
-  // Never downgrade a Confirmed booking back to Cancelled via redirect.
-  if (currentStatus === 'Confirmed') {
-    return { status: currentStatus, changed: false, reason: 'already_confirmed' };
-  }
-
-  // Only finalize from Pending. If somehow Cancelled, leave it.
-  if (currentStatus !== 'Pending') {
-    return { status: currentStatus, changed: false, reason: 'not_pending' };
-  }
-
-  await updateBookingStatus(input.merchantOrderId, target);
-  return { status: target, changed: true };
+  return applyVerifiedPaymentStatusChange(input.merchantOrderId, target);
 }

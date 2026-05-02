@@ -101,6 +101,7 @@ import { HotelFeaturesSection } from '@/components/hotel-features-section';
 import { HotelStorySection } from '@/components/hotel-story-section';
 import { BLUR_DATA_URL } from '@/lib/blur-data-url';
 import { cn } from '@/lib/utils';
+import { getHotelHubHref, getRoomDetailHref } from '@/lib/routing/hotel-links';
 
 // Animation Variants
 const fadeInUp: Variants = {
@@ -311,6 +312,8 @@ export default function HomePageClient({
 
   const isHotelOnly = settings?.modules?.hotels && !settings?.modules?.tours;
   const isSingleHotel = settings?.singleHotelMode;
+  const primaryHotelSlug = hotels[0]?.slug ?? 'default';
+  const hotelHubHref = getHotelHubHref(settings);
 
   // Compute cheapest room price for H1.2 "Starting From" display
   const cheapestRoomPrice = React.useMemo(() => {
@@ -711,7 +714,7 @@ export default function HomePageClient({
                   className="border-primary/20 hover:border-primary text-foreground hover:text-primary hover:bg-primary/5 rounded-full"
                   asChild
                 >
-                  <Link href="/hotels/default">
+                  <Link href={hotelHubHref}>
                     {t('home.viewAllRooms')} <ArrowRight className="ml-2 h-4 w-4" />
                   </Link>
                 </Button>
@@ -730,7 +733,10 @@ export default function HomePageClient({
                       className="pl-4 basis-[85%] sm:basis-1/2 lg:basis-1/3"
                     >
                       <motion.div variants={fadeInUp} className="h-full">
-                        <Link href={`/hotels/default#rooms`} className="group block h-full">
+                        <Link
+                          href={getRoomDetailHref(settings, primaryHotelSlug, room.slug)}
+                          className="group block h-full"
+                        >
                           <Card className="overflow-hidden h-full border-border/40 shadow-lg hover:shadow-2xl transition-all duration-300">
                             {/* Image */}
                             <div className="relative h-52 overflow-hidden">
@@ -813,7 +819,9 @@ export default function HomePageClient({
                                 size="sm"
                                 asChild
                               >
-                                <Link href="/hotels/default">
+                                <Link
+                                  href={getRoomDetailHref(settings, primaryHotelSlug, room.slug)}
+                                >
                                   {t('home.bookNow')} <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
                                 </Link>
                               </Button>
@@ -1677,7 +1685,7 @@ export default function HomePageClient({
                   className="border-primary/20 hover:border-primary text-foreground hover:text-primary hover:bg-primary/5"
                   asChild
                 >
-                  <Link href={isSingleHotel ? '/hotels/default' : '/hotels'}>
+                  <Link href={isSingleHotel ? hotelHubHref : '/hotels'}>
                     {isSingleHotel ? t('home.viewAllRooms') : t('home.viewAllHotels')}{' '}
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Link>
@@ -1686,11 +1694,80 @@ export default function HomePageClient({
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
-              {hotels.slice(0, 6).map((hotel, i) => (
-                <motion.div key={hotel.id} variants={fadeInUp} custom={i}>
-                  <HotelCard hotel={hotel} />
-                </motion.div>
-              ))}
+              {isSingleHotel
+                ? roomTypes.slice(0, 6).map((room, i) => (
+                    <motion.div key={room.id} variants={fadeInUp} custom={i}>
+                      <Link
+                        href={getRoomDetailHref(settings, primaryHotelSlug, room.slug)}
+                        className="group block h-full"
+                      >
+                        <Card className="overflow-hidden h-full border-border/40 shadow-lg hover:shadow-2xl transition-all duration-300">
+                          <div className="relative h-52 overflow-hidden">
+                            {room.images && room.images.length > 0 ? (
+                              <Image
+                                src={room.images[0]}
+                                alt={room.name}
+                                fill
+                                style={{ objectFit: 'cover' }}
+                                className="transition-transform duration-700 group-hover:scale-110"
+                                sizes="(max-width: 768px) 100vw, 33vw"
+                                placeholder="blur"
+                                blurDataURL={BLUR_DATA_URL}
+                              />
+                            ) : (
+                              <div className="h-full w-full bg-gradient-to-br from-muted to-muted/50 flex items-center justify-center">
+                                <BedDouble className="h-12 w-12 text-muted-foreground/40" />
+                              </div>
+                            )}
+                            {room.basePricePerNight != null && (
+                              <div className="absolute top-3 right-3 bg-primary text-primary-foreground text-xs font-bold px-3 py-1.5 rounded-full shadow-lg">
+                                {format(room.basePricePerNight)}
+                                <span className="font-normal opacity-80"> / {t('home.night')}</span>
+                              </div>
+                            )}
+                          </div>
+                          <CardContent className="p-5">
+                            <h3 className="font-headline text-lg font-bold text-foreground group-hover:text-primary transition-colors mb-3">
+                              {room.name}
+                            </h3>
+                            <div className="flex flex-wrap gap-3 mb-4 text-sm text-muted-foreground">
+                              {room.maxAdults > 0 && (
+                                <span className="flex items-center gap-1.5">
+                                  <Users className="h-4 w-4 text-primary/70" />
+                                  {t('home.upTo')} {room.maxAdults + (room.maxChildren ?? 0)}{' '}
+                                  {t('home.guests')}
+                                </span>
+                              )}
+                              {room.sizeSqm != null && (
+                                <span className="flex items-center gap-1.5">
+                                  <Maximize2 className="h-4 w-4 text-primary/70" />
+                                  {room.sizeSqm} m²
+                                </span>
+                              )}
+                            </div>
+                            {room.highlights && room.highlights.length > 0 && (
+                              <ul className="space-y-1">
+                                {room.highlights.slice(0, 3).map((h, idx) => (
+                                  <li
+                                    key={idx}
+                                    className="flex items-center gap-2 text-sm text-muted-foreground"
+                                  >
+                                    <CheckCircle2 className="h-3.5 w-3.5 text-primary shrink-0" />
+                                    <span className="line-clamp-1">{h}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </CardContent>
+                        </Card>
+                      </Link>
+                    </motion.div>
+                  ))
+                : hotels.slice(0, 6).map((hotel, i) => (
+                    <motion.div key={hotel.id} variants={fadeInUp} custom={i}>
+                      <HotelCard hotel={hotel} />
+                    </motion.div>
+                  ))}
             </div>
           </motion.div>
         </section>
