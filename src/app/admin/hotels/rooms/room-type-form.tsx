@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import type { RoomType } from '@/types';
-import { X } from 'lucide-react';
+import { X, Star, ArrowUp, ArrowDown } from 'lucide-react';
 
 const commonAmenities = [
   'Free WiFi',
@@ -167,6 +167,12 @@ export function RoomTypeForm(props: {
   backHref: string;
   action: (formData: FormData) => void | Promise<void>;
   initial?: RoomType | null;
+  /** Required in edit mode — submitted as hidden `_roomId` */
+  roomId?: string;
+  /** Required in edit mode — submitted as hidden `_hotelId` */
+  hotelId?: string;
+  /** Fallback slug used if the user clears the slug field */
+  fallbackSlug?: string;
 }) {
   const initial = props.initial || null;
   const [amenities, setAmenities] = React.useState<string[]>(toStringArray(initial?.amenities));
@@ -211,6 +217,13 @@ export function RoomTypeForm(props: {
       <form action={props.action} className="space-y-6">
         {props.mode === 'edit' ? (
           <>
+            {/* Identity fields — allow the server action to operate without closures */}
+            {props.roomId ? <input type="hidden" name="_roomId" value={props.roomId} /> : null}
+            {props.hotelId ? <input type="hidden" name="_hotelId" value={props.hotelId} /> : null}
+            {props.fallbackSlug ? (
+              <input type="hidden" name="_fallbackSlug" value={props.fallbackSlug} />
+            ) : null}
+            {/* Existing images submitted in display order; first = primary */}
             {existingImages.map((url) => (
               <input key={url} type="hidden" name="existingImages" value={url} />
             ))}
@@ -704,44 +717,124 @@ export function RoomTypeForm(props: {
               </TabsContent>
 
               <TabsContent value="media" className="space-y-6">
-                {props.mode === 'edit' && toStringArray(initial?.images).length > 0 ? (
+                {props.mode === 'edit' && existingImages.length > 0 ? (
                   <div className="space-y-3">
                     <div>
                       <p className="text-sm font-medium">Existing Images</p>
                       <p className="text-sm text-muted-foreground">
-                        Remove images you don&apos;t want to keep.
+                        Drag to reorder or use the arrows. The first image is shown as the primary
+                        photo on listing cards.
                       </p>
                     </div>
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                      {toStringArray(initial?.images).map((url) => {
-                        const keep = existingImages.includes(url);
-                        return (
-                          <div key={url} className="rounded-lg border p-2">
-                            <div className="relative aspect-[4/3] w-full overflow-hidden rounded-md bg-muted">
-                              <Image src={url} alt="" fill className="object-cover" sizes="300px" />
-                            </div>
-                            <div className="mt-2 flex items-center justify-between gap-2">
-                              <span className="truncate text-xs text-muted-foreground">
-                                {keep ? 'Keeping' : 'Removed'}
+                      {existingImages.map((url, idx) => (
+                        <div key={url} className="rounded-lg border p-2">
+                          <div className="relative aspect-[4/3] w-full overflow-hidden rounded-md bg-muted">
+                            <Image src={url} alt="" fill className="object-cover" sizes="300px" />
+                            {idx === 0 ? (
+                              <span className="absolute left-1 top-1 flex items-center gap-1 rounded bg-yellow-400 px-1.5 py-0.5 text-xs font-semibold text-yellow-900">
+                                <Star className="h-3 w-3" /> Primary
                               </span>
+                            ) : null}
+                          </div>
+                          <div className="mt-2 flex items-center justify-between gap-1">
+                            <div className="flex gap-1">
+                              {/* Move up / set as primary */}
                               <Button
                                 type="button"
                                 size="sm"
-                                variant={keep ? 'outline' : 'default'}
+                                variant="outline"
+                                className="h-7 w-7 p-0"
+                                disabled={idx === 0}
+                                title="Move up"
                                 onClick={() => {
-                                  setExistingImages((prev) =>
-                                    prev.includes(url)
-                                      ? prev.filter((x) => x !== url)
-                                      : uniq([...prev, url])
-                                  );
+                                  setExistingImages((prev) => {
+                                    const next = [...prev];
+                                    [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+                                    return next;
+                                  });
                                 }}
                               >
-                                {keep ? 'Remove' : 'Undo'}
+                                <ArrowUp className="h-3.5 w-3.5" />
                               </Button>
+                              {/* Move down */}
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-7 w-7 p-0"
+                                disabled={idx === existingImages.length - 1}
+                                title="Move down"
+                                onClick={() => {
+                                  setExistingImages((prev) => {
+                                    const next = [...prev];
+                                    [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
+                                    return next;
+                                  });
+                                }}
+                              >
+                                <ArrowDown className="h-3.5 w-3.5" />
+                              </Button>
+                              {idx !== 0 ? (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 px-2 text-xs"
+                                  title="Set as primary"
+                                  onClick={() => {
+                                    setExistingImages((prev) => {
+                                      const next = [...prev];
+                                      next.splice(idx, 1);
+                                      return [url, ...next];
+                                    });
+                                  }}
+                                >
+                                  <Star className="mr-1 h-3 w-3" /> Set primary
+                                </Button>
+                              ) : null}
                             </div>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 text-destructive hover:text-destructive"
+                              title="Remove"
+                              onClick={() => {
+                                setExistingImages((prev) => prev.filter((x) => x !== url));
+                              }}
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </Button>
                           </div>
-                        );
-                      })}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {/* Show removed images so admin can undo */}
+                {props.mode === 'edit' &&
+                toStringArray(initial?.images).some((u) => !existingImages.includes(u)) ? (
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-muted-foreground">Removed images</p>
+                    <div className="flex flex-wrap gap-2">
+                      {toStringArray(initial?.images)
+                        .filter((u) => !existingImages.includes(u))
+                        .map((url) => (
+                          <button
+                            key={url}
+                            type="button"
+                            className="group relative h-16 w-20 overflow-hidden rounded border border-dashed opacity-50 hover:opacity-80"
+                            title="Undo removal"
+                            onClick={() => setExistingImages((prev) => [...prev, url])}
+                          >
+                            <Image src={url} alt="" fill className="object-cover" sizes="80px" />
+                            <span className="absolute inset-0 flex items-center justify-center bg-black/30 text-xs font-medium text-white opacity-0 group-hover:opacity-100">
+                              Undo
+                            </span>
+                          </button>
+                        ))}
                     </div>
                   </div>
                 ) : null}

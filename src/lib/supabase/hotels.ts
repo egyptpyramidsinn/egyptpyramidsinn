@@ -900,37 +900,40 @@ export async function updateRoomType(input: {
     files: fileUploads,
   });
 
+  const updateObj = {
+    name: input.name,
+    slug,
+    description: input.description?.trim() || null,
+    max_adults: input.maxAdults,
+    max_children: input.maxChildren,
+    beds: input.beds ?? {},
+    amenities: input.amenities ?? [],
+    services: input.services ?? [],
+    highlights: input.highlights ?? [],
+    size_sqm: input.sizeSqm ?? null,
+    view: input.view?.trim() || null,
+    bathrooms: input.bathrooms ?? null,
+    floor: input.floor ?? null,
+    base_price_per_night: input.basePricePerNight ?? null,
+    currency: getRoomBaseCurrency(),
+    default_units: normalizeRoomUnitCapacity(input.defaultUnits),
+    smoking_allowed: input.smokingAllowed ?? false,
+    refundable: input.refundable ?? true,
+    breakfast_included: input.breakfastIncluded ?? false,
+    pets_allowed: input.petsAllowed ?? false,
+    extra_bed_allowed: input.extraBedAllowed ?? false,
+    extra_bed_fee: input.extraBedFee ?? null,
+    cancellation_policy: input.cancellationPolicy?.trim() || null,
+    // Only overwrite accessibility when explicitly provided; otherwise preserve the existing DB value.
+    ...(input.accessibility !== undefined && { accessibility: input.accessibility }),
+    images: [...existingUrls, ...uploadedUrls],
+    is_featured: input.isFeatured ?? false,
+    is_active: input.isActive,
+  };
+
   const { error } = await supabase
     .from('room_types')
-    .update({
-      name: input.name,
-      slug,
-      description: input.description?.trim() || null,
-      max_adults: input.maxAdults,
-      max_children: input.maxChildren,
-      beds: input.beds ?? {},
-      amenities: input.amenities ?? [],
-      services: input.services ?? [],
-      highlights: input.highlights ?? [],
-      size_sqm: input.sizeSqm ?? null,
-      view: input.view?.trim() || null,
-      bathrooms: input.bathrooms ?? null,
-      floor: input.floor ?? null,
-      base_price_per_night: input.basePricePerNight ?? null,
-      currency: getRoomBaseCurrency(),
-      default_units: normalizeRoomUnitCapacity(input.defaultUnits),
-      smoking_allowed: input.smokingAllowed ?? false,
-      refundable: input.refundable ?? true,
-      breakfast_included: input.breakfastIncluded ?? false,
-      pets_allowed: input.petsAllowed ?? false,
-      extra_bed_allowed: input.extraBedAllowed ?? false,
-      extra_bed_fee: input.extraBedFee ?? null,
-      cancellation_policy: input.cancellationPolicy?.trim() || null,
-      accessibility: input.accessibility ?? {},
-      images: [...existingUrls, ...uploadedUrls],
-      is_featured: input.isFeatured ?? false,
-      is_active: input.isActive,
-    })
+    .update(updateObj)
     .eq('id', input.id)
     .eq('hotel_id', input.hotelId);
 
