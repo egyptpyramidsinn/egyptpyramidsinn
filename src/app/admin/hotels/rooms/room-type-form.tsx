@@ -260,7 +260,11 @@ export function RoomTypeForm(props: {
                 <TabsTrigger value="media">Media</TabsTrigger>
               </TabsList>
 
-              <TabsContent value="basics" className="space-y-5">
+              <TabsContent
+                forceMount
+                value="basics"
+                className="space-y-5 data-[state=inactive]:hidden"
+              >
                 <div className="grid gap-2">
                   <Label htmlFor="name">Room Name</Label>
                   <Input
@@ -363,7 +367,11 @@ export function RoomTypeForm(props: {
                 </label>
               </TabsContent>
 
-              <TabsContent value="occupancy" className="space-y-5">
+              <TabsContent
+                forceMount
+                value="occupancy"
+                className="space-y-5 data-[state=inactive]:hidden"
+              >
                 <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                   <div className="grid gap-2">
                     <Label htmlFor="maxAdults">Max Adults</Label>
@@ -428,7 +436,11 @@ export function RoomTypeForm(props: {
                 />
               </TabsContent>
 
-              <TabsContent value="amenities" className="space-y-6">
+              <TabsContent
+                forceMount
+                value="amenities"
+                className="space-y-6 data-[state=inactive]:hidden"
+              >
                 <div className="grid gap-3">
                   <div>
                     <p className="text-sm font-medium">Common Amenities</p>
@@ -600,7 +612,11 @@ export function RoomTypeForm(props: {
                 </div>
               </TabsContent>
 
-              <TabsContent value="pricing" className="space-y-6">
+              <TabsContent
+                forceMount
+                value="pricing"
+                className="space-y-6 data-[state=inactive]:hidden"
+              >
                 <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
                   <div className="grid gap-2 sm:col-span-2">
                     <Label htmlFor="basePricePerNight">Base Price Per Night</Label>
@@ -716,7 +732,11 @@ export function RoomTypeForm(props: {
                 </div>
               </TabsContent>
 
-              <TabsContent value="media" className="space-y-6">
+              <TabsContent
+                forceMount
+                value="media"
+                className="space-y-6 data-[state=inactive]:hidden"
+              >
                 {props.mode === 'edit' && existingImages.length > 0 ? (
                   <div className="space-y-3">
                     <div>
